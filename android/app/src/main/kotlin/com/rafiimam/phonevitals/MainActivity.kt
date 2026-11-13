@@ -107,7 +107,7 @@ class MainActivity : FlutterActivity() {
             val installer = try { if (Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(ai.packageName).installingPackageName ?: "unknown" else @Suppress("DEPRECATION") pm.getInstallerPackageName(ai.packageName) ?: "unknown" } catch (e: Exception) { "unknown" }
             mapOf("packageName" to ai.packageName, "label" to pm.getApplicationLabel(ai).toString(),
                 "version" to (pi?.versionName ?: ""), "installer" to installer,
-                "firstInstallMs" to (pi?.firstInstallTime ?: 0L), "lastUpdateMs" to (pi?.lastUpdatedTime ?: 0L),
+                "firstInstallMs" to (pi?.firstInstallTime ?: 0L), "lastUpdateMs" to (pi?.lastUpdateTime ?: 0L),
                 "isSystem" to ((ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0),
                 "targetSdk" to ai.targetSdkVersion, "dangerousPermissions" to perms)
         }.sortedBy { it["label"].toString().lowercase() }
