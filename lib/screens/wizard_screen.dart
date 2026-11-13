@@ -20,7 +20,7 @@ class _WizardState extends State<WizardScreen> {
     if(!mounted) return;
     showDialog(context: context, builder: (c)=>AlertDialog(
       title: const Text('Now restart into Safe Mode'),
-      content: const SingleChildScrollView(child: Text('On your Pixel:\n\n1. Press Power + Volume Up together - the power menu opens.\n2. LONG-press the "Restart" tile (or "Power off") until "Reboot to safe mode" appears.\n3. Tap OK. The phone restarts - "Safe mode" shows at the bottom corner.\n4. Use the phone normally for a few hours. Downloaded apps are disabled there; PhoneVitals cannot run in Safe Mode either.\n5. To exit: restart the phone normally, open PhoneVitals, and record the result here.')),
+      content: const SingleChildScrollView(child: Text('METHOD A - phone OFF (most reliable):\n1. Power the phone off completely.\n2. Press Power once to start it.\n3. The moment the Google logo / startup animation appears, press and HOLD Volume Down - keep holding until the phone fully boots.\n4. "Safe mode" at the bottom corner confirms it.\n\nMETHOD B - phone ON:\n1. Briefly hold Power + Volume Up (2-3 seconds only - holding longer force-restarts) until the power menu appears, then let go.\n2. Touch and HOLD the on-screen "Power off" or "Restart" tile - a plain tap just restarts normally.\n3. Tap OK on "Reboot to safe mode".\n\nUse the phone normally for a few hours. Downloaded apps are disabled there; PhoneVitals cannot run in Safe Mode either. To exit: restart normally, open PhoneVitals, and record the result here.')),
       actions: [TextButton(onPressed: ()=>Navigator.pop(c), child: const Text('Got it'))],
     ));
   }
