@@ -51,7 +51,7 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: NavigationBar(selectedIndex:_idx, onDestinationSelected:(i)=>setState(()=>_idx=i), destinations: const [
         NavigationDestination(icon:Icon(Icons.health_and_safety_outlined), label:'Health'),
         NavigationDestination(icon:Icon(Icons.apps), label:'Apps'),
-        NavigationDestination(icon:Icon(Icons.folder_search), label:'Files'),
+        NavigationDestination(icon:Icon(Icons.folder_outlined), label:'Files'),
         NavigationDestination(icon:Icon(Icons.verified_user_outlined), label:'System'),
         NavigationDestination(icon:Icon(Icons.timeline), label:'Timeline'),
         NavigationDestination(icon:Icon(Icons.help_outline), label:'Why?'),
