@@ -1,0 +1,25 @@
+name: phone_vitals
+description: "PhoneVitals - a black box for your phone. Flight recorder, health dashboard, apps/files/system scans, verdict wizard and repair report."
+publish_to: 'none'
+version: 0.1.0+1
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  device_info_plus: ^11.1.0
+  battery_plus: ^6.0.3
+  sensors_plus: ^6.0.1
+  connectivity_plus: ^6.0.3
+  package_info_plus: ^8.0.2
+  shared_preferences: ^2.3.2
+  share_plus: ^10.0.2
+  path_provider: ^2.1.4
+  crypto: ^3.0.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+flutter:
+  uses-material-design: true

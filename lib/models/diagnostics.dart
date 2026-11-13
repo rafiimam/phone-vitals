@@ -1,0 +1,26 @@
+class BatteryDetail {
+  final int level; final String health; final String status; final double tempC;
+  final int voltageMv; final String technology; final int cycleCount; final int currentNowUa; final int chargeCounterUah;
+  const BatteryDetail({required this.level, required this.health, required this.status, required this.tempC, required this.voltageMv, required this.technology, required this.cycleCount, required this.currentNowUa, required this.chargeCounterUah});
+  factory BatteryDetail.fromMap(Map<dynamic,dynamic> m) => BatteryDetail(level:(m['level'] as num?)?.toInt()??-1, health:m['health']?.toString()??'Unknown', status:m['status']?.toString()??'Unknown', tempC:(m['tempC'] as num?)?.toDouble()??-1, voltageMv:(m['voltageMv'] as num?)?.toInt()??-1, technology:m['technology']?.toString()??'Unknown', cycleCount:(m['cycleCount'] as num?)?.toInt()??-1, currentNowUa:(m['currentNowUa'] as num?)?.toInt()??0, chargeCounterUah:(m['chargeCounterUah'] as num?)?.toInt()??0);
+}
+class ThermalInfo { final String label; final int status; final double headroom; const ThermalInfo(this.label,this.status,this.headroom); factory ThermalInfo.fromMap(Map<dynamic,dynamic> m)=>ThermalInfo(m['label']?.toString()??'Unknown',(m['status'] as num?)?.toInt()??-1,(m['headroom'] as num?)?.toDouble()??double.nan); }
+class MemoryStorage { final int totalRamMb; final int availRamMb; final bool lowMemory; final double totalStorageGb; final double freeStorageGb; final int storageUsedPct; final double uptimeHours;
+  const MemoryStorage({required this.totalRamMb, required this.availRamMb, required this.lowMemory, required this.totalStorageGb, required this.freeStorageGb, required this.storageUsedPct, required this.uptimeHours}); 
+  factory MemoryStorage.fromMap(Map<dynamic,dynamic> m)=>MemoryStorage(totalRamMb:(m['totalRamMb'] as num?)?.toInt()??0, availRamMb:(m['availRamMb'] as num?)?.toInt()??0, lowMemory:m['lowMemory']==true, totalStorageGb:(m['totalStorageGb'] as num?)?.toDouble()??0, freeStorageGb:(m['freeStorageGb'] as num?)?.toDouble()??0, storageUsedPct:(m['storageUsedPct'] as num?)?.toInt()??0, uptimeHours:(m['uptimeHours'] as num?)?.toDouble()??0);
+}
+class AppInfoItem {
+  final String packageName; final String label; final String version; final String installer; final int firstInstallMs; final int lastUpdateMs; final bool isSystem; final int targetSdk; final List<String> dangerousPermissions;
+  const AppInfoItem({required this.packageName, required this.label, required this.version, required this.installer, required this.firstInstallMs, required this.lastUpdateMs, required this.isSystem, required this.targetSdk, required this.dangerousPermissions});
+  factory AppInfoItem.fromMap(Map<dynamic,dynamic> m)=>AppInfoItem(packageName:m['packageName']?.toString()??'', label:m['label']?.toString()??'', version:m['version']?.toString()??'', installer:m['installer']?.toString()??'unknown', firstInstallMs:(m['firstInstallMs'] as num?)?.toInt()??0, lastUpdateMs:(m['lastUpdateMs'] as num?)?.toInt()??0, isSystem:m['isSystem']==true, targetSdk:(m['targetSdk'] as num?)?.toInt()??0, dangerousPermissions:((m['dangerousPermissions'] as List?)??[]).map((e)=>e.toString()).toList());
+  bool get sideloaded => !isSystem && installer!='com.android.vending' && installer!='com.google.android.feedback' && installer!='unknown';
+  int get daysSinceUpdate => lastUpdateMs==0?9999:DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(lastUpdateMs)).inDays;
+}
+class FileIssue { final String path; final String kind; final String detail; final int sizeBytes; const FileIssue(this.path,this.kind,this.detail,this.sizeBytes); }
+class SystemIntegrity {
+  final String securityPatch; final String fingerprint; final String verifiedBootState; final bool debuggable; final bool rootSuspected; final List<String> rootClues; final int systemTimeDriftSeconds; final String buildType;
+  const SystemIntegrity({required this.securityPatch, required this.fingerprint, required this.verifiedBootState, required this.debuggable, required this.rootSuspected, required this.rootClues, required this.systemTimeDriftSeconds, required this.buildType});
+  factory SystemIntegrity.fromMap(Map<dynamic,dynamic> m)=>SystemIntegrity(securityPatch:m['securityPatch']?.toString()??'Unknown', fingerprint:m['fingerprint']?.toString()??'Unknown', verifiedBootState:m['verifiedBootState']?.toString()??'unavailable', debuggable:m['debuggable']==true, rootSuspected:m['rootSuspected']==true, rootClues:((m['rootClues'] as List?)??[]).map((e)=>e.toString()).toList(), systemTimeDriftSeconds:(m['systemTimeDriftSeconds'] as num?)?.toInt()??0, buildType:m['buildType']?.toString()??'Unknown');
+  int get patchAgeDays { try { final d=DateTime.parse(securityPatch); return DateTime.now().difference(d).inDays; } catch(_){ return -1; } }
+}
+class RecorderEvent { final int tsMs; final String kind; final String detail; const RecorderEvent(this.tsMs,this.kind,this.detail); Map<String,dynamic> toJson()=>{'ts':tsMs,'kind':kind,'detail':detail}; factory RecorderEvent.fromJson(Map<String,dynamic> j)=>RecorderEvent((j['ts'] as num).toInt(), j['kind'].toString(), j['detail'].toString()); DateTime get time=>DateTime.fromMillisecondsSinceEpoch(tsMs); }
