@@ -17,4 +17,8 @@ class NativeDiagnostics {
   static Future<void> openUsageAccessSettings() async { try { await _ch.invokeMethod('openUsageAccessSettings'); } catch (_) {} }
   static Future<List<Map<String,dynamic>>> usageStats() async { try { final l = await _ch.invokeMethod('getUsageStats'); if (l is List) return l.whereType<Map>().map((m)=>m.map((k,v)=>MapEntry(k.toString(), v))).toList(); } catch (_) {} return []; }
   static Future<List<Map<String,dynamic>>> sharedFiles() async { try { final l = await _ch.invokeMethod('listSharedFiles'); if (l is List) return l.whereType<Map>().map((m)=>m.map((k,v)=>MapEntry(k.toString(), v))).toList(); } catch (_) {} return []; }
+  /// Storage Doctor deletion. URIs are deleted only after Android's own
+  /// consent dialog approves the exact batch; returns false if the user
+  /// cancelled or anything failed - the UI must then say nothing was deleted.
+  static Future<bool> deleteFiles({required List<String> uris, required List<String> paths}) async { try { return await _ch.invokeMethod('deleteFiles', {'uris': uris, 'paths': paths}) == true; } catch (_) { return false; } }
 }

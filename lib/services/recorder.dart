@@ -78,7 +78,7 @@ class Recorder {
   static Future<void> startSafeModeTest() async {
     final sp = await SharedPreferences.getInstance();
     await sp.setInt(_safePendingKey, DateTime.now().millisecondsSinceEpoch);
-    await add('safe_mode_started', 'Safe Mode test started from PhoneVitals. The phone is about to be restarted into Safe Mode by hand - third-party apps (including PhoneVitals) do not run there.');
+    await add('safe_mode_started', 'Safe Mode test started from BlackBox MD. The phone is about to be restarted into Safe Mode by hand - third-party apps (including BlackBox MD) do not run there.');
   }
   static Future<int?> safeModePendingSince() async {
     final sp = await SharedPreferences.getInstance();

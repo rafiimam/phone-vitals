@@ -9,6 +9,7 @@ import '../services/app_scan.dart';
 import '../services/file_scan.dart';
 import '../services/report_generator.dart';
 import 'dashboard_screen.dart';
+import 'case_file_screen.dart';
 import 'scan_screens.dart';
 import 'wizard_screen.dart';
 
@@ -34,21 +35,23 @@ class _HomeShellState extends State<HomeShell> {
     final appFlags=scanApps(_apps,{}).map((f)=>'${f.app.label} (${f.app.packageName}): ${f.flags.join('; ')}').toList();
     final fileFlags=scanFiles(_files).map((f)=>'${f.kind}: ${f.path} - ${f.detail}').toList();
     final text=buildRepairReport(deviceLine:_deviceLine, androidLine:_androidLine, b:_battery,t:_thermal,ms:_mem,sys:_sys,health:_health,events:_events,appFlags:appFlags,fileFlags:fileFlags);
-    await Share.share(text, subject:'PhoneVitals Repair Report - $_deviceLine');
+    await Share.share(text, subject:'BlackBox MD Repair Report - $_deviceLine');
   }
   @override Widget build(BuildContext context){
     final pages=[
+      CaseFileScreen(events:_events, health:_health, battery:_battery, mem:_mem, sys:_sys, deviceLine:_deviceLine, onOpenWizard:()=>setState(()=>_idx=6), onShare:_shareReport),
       DashboardScreen(loading:_loading,battery:_battery,thermal:_thermal,mem:_mem,sys:_sys,health:_health,deviceLine:_deviceLine,androidLine:_androidLine,onRefresh:_load,onShare:_shareReport),
       AppsScanScreen(apps:_apps),
-      FilesScanScreen(files:_files),
+      FilesScanScreen(files:_files, onFilesChanged:_load),
       SystemScreen(sys:_sys, androidLine:_androidLine),
       TimelineScreen(events:_events),
       const WizardScreen(),
     ];
     return Scaffold(
-      appBar: AppBar(title: const Text('PhoneVitals'), actions:[IconButton(onPressed:_shareReport, icon: const Icon(Icons.share), tooltip:'Share repair report'), IconButton(onPressed:_load, icon: const Icon(Icons.refresh))]),
+      appBar: AppBar(title: const Text('BlackBox MD'), actions:[IconButton(onPressed:_shareReport, icon: const Icon(Icons.share), tooltip:'Share repair report'), IconButton(onPressed:_load, icon: const Icon(Icons.refresh))]),
       body: _loading && _battery==null ? const Center(child:CircularProgressIndicator()) : pages[_idx],
       bottomNavigationBar: NavigationBar(selectedIndex:_idx, onDestinationSelected:(i)=>setState(()=>_idx=i), destinations: const [
+        NavigationDestination(icon:Icon(Icons.assignment_outlined), label:'Case'),
         NavigationDestination(icon:Icon(Icons.health_and_safety_outlined), label:'Health'),
         NavigationDestination(icon:Icon(Icons.apps), label:'Apps'),
         NavigationDestination(icon:Icon(Icons.folder_outlined), label:'Files'),

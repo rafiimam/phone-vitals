@@ -10,6 +10,10 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.hardware.SensorManager
 import android.os.*
+import android.app.Activity
+import android.content.ContentUris
+import android.net.Uri
+import android.provider.MediaStore
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -19,6 +23,9 @@ import java.security.MessageDigest
 
 class MainActivity : FlutterActivity() {
     private val channel = "com.rafiimam.phonevitals/diagnostics"
+    private var pendingDelete: MethodChannel.Result? = null
+    private var pendingDeletePaths: List<String> = emptyList()
+    private val reqDelete = 4471
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel).setMethodCallHandler { call, result ->
@@ -36,6 +43,7 @@ class MainActivity : FlutterActivity() {
                     "getUsageStats" -> result.success(usageStats())
                     "listSharedFiles" -> result.success(sharedFiles())
                     "getBootInfo" -> result.success(bootInfo())
+                    "deleteFiles" -> { val u = (call.argument<List<String>>("uris") ?: emptyList()); val p = (call.argument<List<String>>("paths") ?: emptyList()); deleteFiles(u, p, result) }
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) { result.success(null) }
@@ -157,8 +165,78 @@ class MainActivity : FlutterActivity() {
             val headerOk: Boolean? = when { f.name.lowercase().endsWith(".jpg") || f.name.lowercase().endsWith(".jpeg") -> try { val b = ByteArray(2); f.inputStream().use { it.read(b) }; (b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte()) } catch (e: Exception) { false }
                 f.name.lowercase().endsWith(".png") -> try { val b = ByteArray(4); f.inputStream().use { it.read(b) }; (b[0] == 0x89.toByte()) } catch (e: Exception) { false }
                 else -> null }
-            out.add(mapOf("path" to f.absolutePath, "size" to f.length(), "sha256" to sha, "headerOk" to headerOk))
+            out.add(mapOf("path" to f.absolutePath, "size" to f.length(), "sha256" to sha, "headerOk" to headerOk, "uri" to null))
         } } }
+        mediaStoreFiles(out)
         return out
     }
+
+    /// MediaStore merge: files the legacy directory listing cannot see under
+    /// scoped storage, each with its content URI - the URI is what makes the
+    /// system-consent delete (createDeleteRequest) possible in Storage Doctor.
+    private fun mediaStoreFiles(into: MutableList<Map<String, Any?>>) {
+        try {
+            val coll = MediaStore.Files.getContentUri("external")
+            val proj = arrayOf(MediaStore.Files.FileColumns._ID, MediaStore.Files.FileColumns.DISPLAY_NAME, MediaStore.Files.FileColumns.SIZE, MediaStore.Files.FileColumns.RELATIVE_PATH, MediaStore.Files.FileColumns.DATA)
+            contentResolver.query(coll, proj, null, null, null)?.use { c ->
+                val idI = c.getColumnIndex(MediaStore.Files.FileColumns._ID)
+                val nameI = c.getColumnIndex(MediaStore.Files.FileColumns.DISPLAY_NAME)
+                val sizeI = c.getColumnIndex(MediaStore.Files.FileColumns.SIZE)
+                val relI = c.getColumnIndex(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                val dataI = c.getColumnIndex(MediaStore.Files.FileColumns.DATA)
+                if (idI < 0 || nameI < 0 || sizeI < 0) return
+                val seen = into.map { it["path"].toString() }.toHashSet()
+                while (c.moveToNext()) {
+                    val name = c.getString(nameI) ?: continue
+                    val rel = if (relI >= 0) c.getString(relI) ?: "" else ""
+                    val dataPath = if (dataI >= 0) c.getString(dataI) else null
+                    val path = dataPath ?: ("/storage/emulated/0/" + rel + name)
+                    if (!seen.add(path)) continue
+                    val size = c.getLong(sizeI)
+                    val uri = ContentUris.withAppendedId(coll, c.getLong(idI))
+                    var sha: String? = null
+                    if (size in (1024*1024)..(200L*1024*1024)) { sha = try { val md = MessageDigest.getInstance("SHA-256"); contentResolver.openInputStream(uri)?.use { inp -> val buf = ByteArray(8192); var n: Int; while (inp.read(buf).also { n = it } > 0) md.update(buf, 0, n) }; md.digest().joinToString("") { "%02x".format(it) } } catch (e: Exception) { null } }
+                    val lower = name.lowercase()
+                    val headerOk: Boolean? = when { lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> try { val b = ByteArray(2); contentResolver.openInputStream(uri)?.use { it.read(b) }; (b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte()) } catch (e: Exception) { false }
+                        lower.endsWith(".png") -> try { val b = ByteArray(4); contentResolver.openInputStream(uri)?.use { it.read(b) }; (b[0] == 0x89.toByte()) } catch (e: Exception) { false }
+                        else -> null }
+                    into.add(mapOf("path" to path, "size" to size, "sha256" to sha, "headerOk" to headerOk, "uri" to uri.toString()))
+                }
+            }
+        } catch (e: Exception) {}
+    }
+
+    /// Storage Doctor deletion. MediaStore URIs go through Android's own
+    /// consent dialog (createDeleteRequest, API 30+) - the user approves the
+    /// exact batch; nothing is deleted silently. Plain paths (legacy listing)
+    /// are deleted directly only where the OS lets this app write.
+    private fun deleteFiles(uriStrs: List<String>, paths: List<String>, result: MethodChannel.Result) {
+        val uriList = uriStrs.mapNotNull { try { Uri.parse(it) } catch (e: Exception) { null } }
+        if (uriList.isEmpty() || Build.VERSION.SDK_INT < 30) {
+            var ok = true
+            for (u in uriList) { try { if (contentResolver.delete(u, null, null) <= 0) ok = false } catch (e: Exception) { ok = false } }
+            for (p in paths) { try { val f = File(p); if (f.exists() && !f.delete()) ok = false } catch (e: Exception) { ok = false } }
+            result.success(ok); return
+        }
+        if (pendingDelete != null) { result.success(false); return }
+        pendingDelete = result; pendingDeletePaths = paths
+        try {
+            val pi = MediaStore.createDeleteRequest(contentResolver, uriList)
+            startIntentSenderForResult(pi.intentSender, reqDelete, null, 0, 0, 0)
+        } catch (e: Exception) { pendingDelete = null; pendingDeletePaths = emptyList(); result.success(false) }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == reqDelete) {
+            val r = pendingDelete; pendingDelete = null
+            val paths = pendingDeletePaths; pendingDeletePaths = emptyList()
+            if (resultCode == Activity.RESULT_OK) {
+                var ok = true
+                for (p in paths) { try { val f = File(p); if (f.exists() && !f.delete()) ok = false } catch (e: Exception) { ok = false } }
+                r?.success(ok)
+            } else { r?.success(false) }
+        }
+    }
 }
+

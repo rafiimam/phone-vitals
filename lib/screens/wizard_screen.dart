@@ -20,7 +20,7 @@ class _WizardState extends State<WizardScreen> {
     if(!mounted) return;
     showDialog(context: context, builder: (c)=>AlertDialog(
       title: const Text('Now restart into Safe Mode'),
-      content: const SingleChildScrollView(child: Text('METHOD A - phone OFF (most reliable):\n1. Power the phone off completely.\n2. Press Power once to start it.\n3. The moment the Google logo / startup animation appears, press and HOLD Volume Down - keep holding until the phone fully boots.\n4. "Safe mode" at the bottom corner confirms it.\n\nMETHOD B - phone ON:\n1. Briefly hold Power + Volume Up (2-3 seconds only - holding longer force-restarts) until the power menu appears, then let go.\n2. Touch and HOLD the on-screen "Power off" or "Restart" tile - a plain tap just restarts normally.\n3. Tap OK on "Reboot to safe mode".\n\nUse the phone normally for a few hours. Downloaded apps are disabled there; PhoneVitals cannot run in Safe Mode either. To exit: restart normally, open PhoneVitals, and record the result here.')),
+      content: const SingleChildScrollView(child: Text('METHOD A - phone OFF (most reliable):\n1. Power the phone off completely.\n2. Press Power once to start it.\n3. The moment the Google logo / startup animation appears, press and HOLD Volume Down - keep holding until the phone fully boots.\n4. "Safe mode" at the bottom corner confirms it.\n\nMETHOD B - phone ON:\n1. Briefly hold Power + Volume Up (2-3 seconds only - holding longer force-restarts) until the power menu appears, then let go.\n2. Touch and HOLD the on-screen "Power off" or "Restart" tile - a plain tap just restarts normally.\n3. Tap OK on "Reboot to safe mode".\n\nUse the phone normally for a few hours. Downloaded apps are disabled there; BlackBox MD cannot run in Safe Mode either. To exit: restart normally, open BlackBox MD, and record the result here.')),
       actions: [TextButton(onPressed: ()=>Navigator.pop(c), child: const Text('Got it'))],
     ));
   }
@@ -52,7 +52,7 @@ class _WizardState extends State<WizardScreen> {
         const SizedBox(height: 8),
         const Text('Safe Mode runs only Google\'s built-in apps. If the phone still dies there, no downloaded app can be the cause - it is the OS or hardware. If it stays stable, a downloaded app is the culprit.', style: TextStyle(color: Colors.white70)),
         const SizedBox(height: 8),
-        const Text('Honest limit: Android does not let ANY app reboot your phone into Safe Mode - rebooting is reserved for the system. Any app promising a one-tap Safe Mode is lying or rooted. PhoneVitals records the test, guides your hands, and saves the verdict.', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
+        const Text('Honest limit: Android does not let ANY app reboot your phone into Safe Mode - rebooting is reserved for the system. Any app promising a one-tap Safe Mode is lying or rooted. BlackBox MD records the test, guides your hands, and saves the verdict.', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
         const SizedBox(height: 12),
         if(!pending) FilledButton.icon(onPressed: _startTest, style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF17457A)), icon: const Icon(Icons.play_arrow), label: const Text('Start Safe Mode test')),
         if(pending) ...[

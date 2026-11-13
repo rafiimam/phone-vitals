@@ -1,10 +1,10 @@
-# PhoneVitals — a black box for your phone
+# BlackBox MD — a black box and a doctor for your phone
 
 **Why did my phone die?** Every Android user asks it. No major app answers it.
 
 DevCheck, AIDA64 and CPU-Z dump 200 raw numbers and forget everything when your phone dies. AccuBattery estimates battery wear, but only for the battery. None of them keep a history, none give a plain-language verdict, and none produce the report a repair shop actually needs.
 
-PhoneVitals is different: it's a **flight recorder**.
+BlackBox MD is different: it's a **flight recorder**.
 
 - It logs your phone's vitals — battery %, temperature, voltage, thermal status
 - It records **inferred unclean shutdowns** across reboots (see "Honest limits" below)
@@ -39,7 +39,7 @@ One tap shares a complete report: device/build, battery, thermal, timeline, app 
 
 ## Honest limits — what no normal app can do
 
-Android blocks these for non-system apps. PhoneVitals says so in the UI instead of faking them:
+Android blocks these for non-system apps. BlackBox MD says so in the UI instead of faking them:
 
 - ❌ Scan or hash `/system` / OS files — **Verified Boot already does this at startup**; a hang at the Google logo can be exactly that check failing
 - ❌ True per-app CPU %, per-app RAM, per-app battery mAh for other apps
@@ -58,7 +58,7 @@ This honesty is a feature. Competitors present guesses as measurements.
 3. Check storage — keep **>10% free**; screenshot Settings → Battery → Battery usage
 4. **Safe Mode test** — if it's fine there, it's an app; if not, it's not an app
 5. Try Pixel Repair (`pixelrepair.withgoogle.com`) from a computer before any factory reset
-6. Install PhoneVitals and let the recorder collect the next failure
+6. Install BlackBox MD and let the recorder collect the next failure
 
 Most likely for a 2021 Pixel 6 in 2026: a degraded battery (Google rates these batteries to ~80% for ~800 cycles, and Pixel 6 doesn't show health % in Settings), amplified by heat — then corrupted update/storage, then board.
 

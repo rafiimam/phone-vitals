@@ -1,4 +1,4 @@
-# PhoneVitals — Product Plan
+# BlackBox MD — Product Plan
 
 ## Problem
 A Pixel 6 (2021, Tensor G1) hangs in use, powers off (sometimes auto-restarts, sometimes needs Power+Volume Up), hangs at the Google logo, and overheats while hung. Millions of aging Android phones fail the same way, and users cannot tell app vs software vs battery vs board — so they either panic-reset (losing data) or pay for the wrong repair.
@@ -26,3 +26,11 @@ After 1 week installed, the report should be able to say e.g.: "N unclean shutdo
 
 ## Play Store guardrails
 Optional Usage Access only, privacy policy + Data safety, on-device processing, user-initiated share only, typed FGS declaration avoided in MVP (WorkManager later), target API current at submission.
+
+
+## v0.3.0 — Phase 1: BlackBox MD (2026-11-13)
+- Renamed PhoneVitals -> BlackBox MD (display name only; applicationId unchanged so existing installs, recorder history and case data carry over). Reason: 'PhoneVitals' is an existing commercial iPhone-diagnostics product in the same repair-report niche.
+- Flagship = the Case File (Sudden-Failure Forensics): black-box recorder + elimination tests + ruled-out / still-suspect evidence board + Repair Passport. Storage cleanup is a treatment, not the headline.
+- Dr. BlackBox avatar: layered-vector character (CustomPainter) with a DoctorMode outfit system - hat, outfit colour, tool chip and speech change per problem (check-up, storage, battery, cool-down, cache, notifications, detective, connectivity, hardware, update).
+- Storage Doctor treatment: user-selected cleanup of zero-byte files, partial downloads, duplicate copies (first copy never pre-selected) and APKs; deletion goes through Android's own MediaStore consent dialog (createDeleteRequest) - nothing silent; result is verified by re-measuring free storage before/after and recorded as a Timeline event.
+- Launcher icon: robot-doctor logo chosen; PNG set (all densities + 512 Play + 1024 master) lives in the branding folder - dropped into res/mipmap-* at release-build time (the GitHub connector cannot carry binaries).

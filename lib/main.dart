@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/home_shell.dart';
-void main(){ WidgetsFlutterBinding.ensureInitialized(); runApp(const PhoneVitalsApp()); }
-class PhoneVitalsApp extends StatelessWidget {
-  const PhoneVitalsApp({super.key});
+void main(){ WidgetsFlutterBinding.ensureInitialized(); runApp(const BlackBoxMDApp()); }
+class BlackBoxMDApp extends StatelessWidget {
+  const BlackBoxMDApp({super.key});
   @override Widget build(BuildContext context){
     const navy = Color(0xFF17457A);
-    return MaterialApp(title:'PhoneVitals', debugShowCheckedModeBanner:false,
+    return MaterialApp(title:'BlackBox MD', debugShowCheckedModeBanner:false,
       theme: ThemeData(
         useMaterial3:true,
         colorScheme: ColorScheme.fromSeed(seedColor: navy, brightness: Brightness.light),

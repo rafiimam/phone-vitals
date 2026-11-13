@@ -2,7 +2,7 @@ import '../models/diagnostics.dart';
 import 'health_score.dart';
 String buildRepairReport({required String deviceLine, required String androidLine, BatteryDetail? b, ThermalInfo? t, MemoryStorage? ms, SystemIntegrity? sys, required HealthResult health, required List<RecorderEvent> events, required List<String> appFlags, required List<String> fileFlags, String wizardVerdict=''}) {
   final sb=StringBuffer();
-  sb.writeln('PhoneVitals - Repair Report'); sb.writeln('Generated: ${DateTime.now()}'); sb.writeln('Device: $deviceLine'); sb.writeln('Android: $androidLine'); sb.writeln('');
+  sb.writeln('BlackBox MD - Repair Report'); sb.writeln('Generated: ${DateTime.now()}'); sb.writeln('Device: $deviceLine'); sb.writeln('Android: $androidLine'); sb.writeln('');
   sb.writeln('HEALTH: ${health.score}/100 - ${health.verdict}');
   if (wizardVerdict.isNotEmpty) sb.writeln('Wizard verdict: $wizardVerdict');
   sb.writeln(''); sb.writeln('BATTERY (Measured unless labelled)'); if(b!=null){ sb.writeln('- Level ${b.level}%  Health ${b.health}  Status ${b.status}'); sb.writeln('- Temp ${b.tempC}C  Voltage ${b.voltageMv} mV  CurrentNow ${b.currentNowUa} uA'); sb.writeln('- Cycles ${b.cycleCount}  Technology ${b.technology}'); }

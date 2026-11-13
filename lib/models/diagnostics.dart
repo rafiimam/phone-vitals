@@ -16,7 +16,7 @@ class AppInfoItem {
   bool get sideloaded => !isSystem && installer!='com.android.vending' && installer!='com.google.android.feedback' && installer!='unknown';
   int get daysSinceUpdate => lastUpdateMs==0?9999:DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(lastUpdateMs)).inDays;
 }
-class FileIssue { final String path; final String kind; final String detail; final int sizeBytes; const FileIssue(this.path,this.kind,this.detail,this.sizeBytes); }
+class FileIssue { final String path; final String kind; final String detail; final int sizeBytes; final String uri; const FileIssue(this.path,this.kind,this.detail,this.sizeBytes,{this.uri=''}); }
 class SystemIntegrity {
   final String securityPatch; final String fingerprint; final String verifiedBootState; final bool debuggable; final bool rootSuspected; final List<String> rootClues; final int systemTimeDriftSeconds; final String buildType;
   const SystemIntegrity({required this.securityPatch, required this.fingerprint, required this.verifiedBootState, required this.debuggable, required this.rootSuspected, required this.rootClues, required this.systemTimeDriftSeconds, required this.buildType});
