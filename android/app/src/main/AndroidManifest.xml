@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- NO QUERY_ALL_PACKAGES - Play rejects it for diagnostics apps. Package visibility via <queries> + PackageManager flags below. -->
     <queries><intent><action android:name="android.intent.action.MAIN"/></intent></queries>
     <application android:label="PhoneVitals" android:name="${applicationName}" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher">

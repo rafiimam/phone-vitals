@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
                     "openUsageAccessSettings" -> { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); result.success(true) }
                     "getUsageStats" -> result.success(usageStats())
                     "listSharedFiles" -> result.success(sharedFiles())
+                    "getBootInfo" -> result.success(bootInfo())
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) { result.success(null) }
@@ -113,6 +114,12 @@ class MainActivity : FlutterActivity() {
         }.sortedBy { it["label"].toString().lowercase() }
     }
 
+    private fun bootInfo(): Map<String, Any?> {
+        val bc = try { Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1) } catch (e: Exception) { -1 }
+        val up = SystemClock.elapsedRealtime()
+        return mapOf("bootCount" to bc, "uptimeMs" to up, "bootWallMs" to (System.currentTimeMillis() - up))
+    }
+
     private fun systemIntegrity(): Map<String, Any?> {
         val verified = sysProp("ro.boot.verifiedbootstate").ifEmpty { "unavailable" }
         val rootClues = mutableListOf<String>()
@@ -120,7 +127,7 @@ class MainActivity : FlutterActivity() {
         try { Runtime.getRuntime().exec(arrayOf("which","su")).let { if (it.waitFor()==0) rootClues.add("su in PATH") } } catch (e: Exception) {}
         if (Build.TAGS?.contains("test-keys") == true) rootClues.add("test-keys build")
         return mapOf("securityPatch" to (Build.VERSION.SECURITY_PATCH ?: "Unknown"), "fingerprint" to Build.FINGERPRINT,
-            "verifiedBootState" to verified, "debuggable" to ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0),
+            "verifiedBootState" to verified, "debuggable" to (sysProp("ro.debuggable") == "1"),
             "rootSuspected" to rootClues.isNotEmpty(), "rootClues" to rootClues,
             "systemTimeDriftSeconds" to 0, "buildType" to (Build.TYPE ?: "Unknown"))
     }

@@ -39,7 +39,7 @@ class SystemScreen extends StatelessWidget { final SystemIntegrity? sys; final S
     if(sys!=null) ...[
       ListTile(title: const Text('Security patch'), subtitle: Text('${sys!.securityPatch} - ${sys!.patchAgeDays<0?'date unavailable':'${sys!.patchAgeDays} days old'}')),
       ListTile(title: const Text('Verified Boot state'), subtitle: Text(sys!.verifiedBootState=='unavailable'?'Unavailable - Android blocks the true boot reason for normal apps':sys!.verifiedBootState)),
-      ListTile(title: const Text('Build'), subtitle: Text('${sys!.buildType} - debuggable: ${sys!.debuggable}')),
+      ListTile(title: const Text('Build'), subtitle: Text('${sys!.buildType} - OS debuggable (ro.debuggable): ${sys!.debuggable}')),
       ListTile(title: const Text('Root / modification'), subtitle: Text(sys!.rootSuspected?'Suspected: ${sys!.rootClues.join(', ')}':'No common root clues found (heuristic, not proof)')),
       ListTile(title: const Text('Fingerprint'), subtitle: Text(sys!.fingerprint)),
     ],
@@ -47,10 +47,32 @@ class SystemScreen extends StatelessWidget { final SystemIntegrity? sys; final S
   ]); }
 }
 class TimelineScreen extends StatelessWidget { final List<RecorderEvent> events; const TimelineScreen({super.key, required this.events});
+  static String _title(String k){
+    if(k=='unexpected_reboot') return 'Unexpected reboot';
+    if(k=='reboot_clean') return 'Normal restart';
+    if(k=='safe_mode_started') return 'Safe Mode test started';
+    if(k=='safe_mode_result') return 'Safe Mode test result';
+    if(k=='unclean_exit') return 'App session ended (v0.1 legacy)';
+    return k;
+  }
+  static IconData _icon(String k){
+    if(k=='unexpected_reboot') return Icons.power_off;
+    if(k=='reboot_clean') return Icons.restart_alt;
+    if(k=='safe_mode_started' || k=='safe_mode_result') return Icons.shield_outlined;
+    return Icons.event;
+  }
+  static Color _color(String k){
+    if(k=='unexpected_reboot') return Colors.red;
+    if(k=='reboot_clean') return const Color(0xFF17457A);
+    if(k=='safe_mode_started' || k=='safe_mode_result') return Colors.deepPurple;
+    return Colors.grey;
+  }
   @override Widget build(BuildContext context){ return ListView(padding: const EdgeInsets.all(16), children:[
-    const Text('Black Box Timeline', style: TextStyle(fontSize:20,fontWeight:FontWeight.bold)),
-    const Text('Unclean exits are inferred from a missing clean-shutdown marker + heartbeat - Android does not give normal apps the kernel shutdown reason.'),
-    if(events.isEmpty) const Text('No events yet. Leave PhoneVitals installed - the recorder learns from the next shutdown / reboot.'),
-    ...events.map((e)=>Card(child: ListTile(leading: Icon(e.kind=='unclean_exit'?Icons.power_off:Icons.event), title: Text(e.kind), subtitle: Text('${e.time}\n${e.detail}'), isThreeLine:true))),
+    const Text('Black Box Timeline', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF12283F))),
+    const SizedBox(height: 4),
+    const Text('A reboot is counted only when Android\'s boot count changes. A clean shutdown signal (power menu / update) = normal restart; no signal = the phone died, crashed or lost power. The kernel reason itself is hidden from normal apps. v0.1 "app session ended" entries were app-process restarts, NOT phone shutdowns.'),
+    const SizedBox(height: 10),
+    if(events.isEmpty) const Text('No events yet. Leave PhoneVitals installed - the recorder learns from the next reboot.'),
+    ...events.map((e)=>Card(child: ListTile(contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), leading: CircleAvatar(backgroundColor: _color(e.kind).withOpacity(0.12), child: Icon(_icon(e.kind), color: _color(e.kind))), title: Text(_title(e.kind), style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('${e.time}\n${e.detail}'), isThreeLine:true))),
   ]); }
 }

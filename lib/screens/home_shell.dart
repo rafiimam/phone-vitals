@@ -23,12 +23,13 @@ class _HomeShellState extends State<HomeShell> {
     setState(()=>_loading=true);
     try { final di=await DeviceInfoPlugin().androidInfo; _deviceLine='${di.manufacturer} ${di.model} (${di.device})'; _androidLine='Android ${di.version.release} SDK ${di.version.sdkInt}, patch ${di.version.securityPatch}'; } catch(_){}
     _battery=await NativeDiagnostics.battery(); _thermal=await NativeDiagnostics.thermal(); _mem=await NativeDiagnostics.memoryStorage(); _sys=await NativeDiagnostics.systemIntegrity();
-    _events=await Recorder.checkAndLoad();
-    if(_battery!=null) await Recorder.heartbeat(batteryPct:_battery!.level, tempC:_battery!.tempC, thermal:_thermal?.label??'unknown');
+    final boot=await NativeDiagnostics.bootInfo(); final bc=(boot['bootCount'] as num?)?.toInt()??-1; final up=(boot['uptimeMs'] as num?)?.toInt()??-1;
+    _events=await Recorder.checkAndLoad(bootCount:bc, uptimeMs:up);
+    if(_battery!=null) await Recorder.heartbeat(batteryPct:_battery!.level, tempC:_battery!.tempC, thermal:_thermal?.label??'unknown', uptimeMs:up);
     _apps=await NativeDiagnostics.installedApps(); _files=await NativeDiagnostics.sharedFiles();
     if(mounted) setState(()=>_loading=false);
   }
-  HealthResult get _health=>evaluateHealth(b:_battery,t:_thermal,ms:_mem,sys:_sys,uncleanCount:_events.where((e)=>e.kind=='unclean_exit').length);
+  HealthResult get _health=>evaluateHealth(b:_battery,t:_thermal,ms:_mem,sys:_sys,uncleanCount:_events.where((e)=>e.kind=='unexpected_reboot').length);
   Future<void> _shareReport() async {
     final appFlags=scanApps(_apps,{}).map((f)=>'${f.app.label} (${f.app.packageName}): ${f.flags.join('; ')}').toList();
     final fileFlags=scanFiles(_files).map((f)=>'${f.kind}: ${f.path} - ${f.detail}').toList();
@@ -50,7 +51,7 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: NavigationBar(selectedIndex:_idx, onDestinationSelected:(i)=>setState(()=>_idx=i), destinations: const [
         NavigationDestination(icon:Icon(Icons.health_and_safety_outlined), label:'Health'),
         NavigationDestination(icon:Icon(Icons.apps), label:'Apps'),
-        NavigationDestination(icon: Icon(Icons.folder_open), label: 'Files'),
+        NavigationDestination(icon:Icon(Icons.folder_search), label:'Files'),
         NavigationDestination(icon:Icon(Icons.verified_user_outlined), label:'System'),
         NavigationDestination(icon:Icon(Icons.timeline), label:'Timeline'),
         NavigationDestination(icon:Icon(Icons.help_outline), label:'Why?'),

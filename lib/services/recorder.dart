@@ -1,35 +1,99 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/diagnostics.dart';
-/// The "black box": persists a heartbeat + a clean-shutdown marker.
-/// On launch, if the previous session had a heartbeat but NO clean-exit
-/// marker and uptime has reset, we infer an unclean shutdown.
-/// This is an INFERENCE - Android blocks the true kernel boot reason
-/// for normal apps. We label it that way everywhere in the UI.
+/// The "black box" - v2.
+///
+/// v0.1's flaw: it treated "the previous APP session ended without a clean-exit
+/// marker" as a possible phone shutdown. Android kills app processes all the
+/// time, so that produced false unclean_exit clusters and, worse, could MISS a
+/// real reboot (a normal app pause had set the "clean" flag).
+///
+/// v2 rule: a reboot is counted ONLY when the device's boot identity changes -
+/// Android's Settings.Global.BOOT_COUNT increases, or the elapsed-realtime
+/// uptime clock goes backwards. At that point, the native BootReceiver's
+/// record decides clean vs unexpected: ACTION_SHUTDOWN/ACTION_REBOOT mean the
+/// previous boot ended on purpose; their absence after a crash, battery pull
+/// or kernel panic means it did not. One event per boot, never per app launch.
+/// The true kernel shutdown reason stays unavailable to normal apps - the
+/// events are labelled inferred everywhere.
 class Recorder {
-  static const _eventsKey='pv_events'; static const _heartbeatKey='pv_heartbeat_ms'; static const _cleanKey='pv_clean_exit';
-  static Future<void> heartbeat({required int batteryPct, required double tempC, required String thermal}) async {
-    final sp=await SharedPreferences.getInstance();
-    await sp.setInt(_heartbeatKey, DateTime.now().millisecondsSinceEpoch);
-    await sp.setBool(_cleanKey, false);
-    await sp.setString('pv_last_vitals', jsonEncode({'pct':batteryPct,'temp':tempC,'thermal':thermal,'ts':DateTime.now().millisecondsSinceEpoch}));
+  static const _eventsKey = 'pv_events';
+  static const _heartbeatKey = 'pv_heartbeat_ms';
+  static const _vitalsKey = 'pv_last_vitals';
+  static const _snapBootKey = 'pv_snap_boot_count';
+  static const _snapUptimeKey = 'pv_snap_uptime_ms';
+  static const _loggedBootKey = 'pv_logged_boot_key';
+  static const _safePendingKey = 'pv_safemode_pending_ms';
+
+  static Future<void> heartbeat({required int batteryPct, required double tempC, required String thermal, int uptimeMs = -1}) async {
+    final sp = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await sp.setInt(_heartbeatKey, now);
+    await sp.setString(_vitalsKey, jsonEncode({'pct': batteryPct, 'temp': tempC, 'thermal': thermal, 'ts': now}));
+    if (uptimeMs >= 0) await sp.setInt(_snapUptimeKey, uptimeMs);
   }
-  static Future<void> markCleanExit() async { final sp=await SharedPreferences.getInstance(); await sp.setBool(_cleanKey, true); }
-  static Future<List<RecorderEvent>> checkAndLoad() async {
-    final sp=await SharedPreferences.getInstance();
-    final events=_decode(sp.getString(_eventsKey));
-    final lastBeat=sp.getInt(_heartbeatKey); final clean=sp.getBool(_cleanKey)??true;
-    if (lastBeat!=null && !clean) {
-      // A previous session ended without a clean marker.
-      // We cannot know if it was a crash of THIS app vs a whole-phone shutdown,
-      // so the wording stays "unclean exit / possible shutdown".
-      final already=events.any((e)=>e.tsMs==lastBeat && e.kind=='unclean_exit');
-      if (!already) { events.add(RecorderEvent(lastBeat,'unclean_exit','Previous session ended without a clean shutdown marker. If the whole phone died, this was an unexpected shutdown - inferred, not a kernel reason.')); await sp.setString(_eventsKey, jsonEncode(events.map((e)=>e.toJson()).toList())); }
+
+  static Future<List<RecorderEvent>> checkAndLoad({int bootCount = -1, int uptimeMs = -1}) async {
+    final sp = await SharedPreferences.getInstance();
+    final events = _decode(sp.getString(_eventsKey));
+    final snapBoot = sp.getInt(_snapBootKey);
+    final snapUp = sp.getInt(_snapUptimeKey);
+    final loggedKey = sp.getInt(_loggedBootKey) ?? -999999;
+    var rebooted = false;
+    if (bootCount >= 0 && snapBoot != null && bootCount > snapBoot) rebooted = true;
+    if (!rebooted && uptimeMs >= 0 && snapUp != null && uptimeMs < snapUp - 60000) rebooted = true;
+    final bootKey = bootCount >= 0 ? bootCount : (uptimeMs >= 0 ? -(DateTime.now().millisecondsSinceEpoch - uptimeMs) : 0);
+    if (rebooted && bootKey != loggedKey) {
+      final prevClean = sp.getBool('pv_prev_boot_clean') ?? sp.getBool('pv_clean_exit') ?? false;
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final bootWall = uptimeMs >= 0 ? nowMs - uptimeMs : nowMs;
+      if (prevClean) {
+        events.add(RecorderEvent(bootWall, 'reboot_clean', 'Phone restarted with a clean shutdown signal (power menu or system update). Not a failure - recorded so real failures stand out.'));
+      } else {
+        var vit = '';
+        try {
+          final raw = sp.getString(_vitalsKey);
+          if (raw != null) { final m = jsonDecode(raw) as Map; vit = ' Last heartbeat before it: battery ${m['pct']}%, temp ${m['temp']}C, thermal ${m['thermal']}.'; }
+        } catch (_) {}
+        final beat = sp.getInt(_heartbeatKey);
+        events.add(RecorderEvent(beat ?? bootWall, 'unexpected_reboot', 'Phone rebooted and NO clean shutdown was recorded - it died, crashed or lost power.$vit Detection: Android boot count changed. The kernel reason itself is hidden from normal apps, so this is inferred - but the reboot is real.'));
+      }
+      await sp.setInt(_loggedBootKey, bootKey);
+      await sp.setString(_eventsKey, jsonEncode(events.map((e) => e.toJson()).toList()));
     }
-    await sp.setBool(_cleanKey, false);
-    events.sort((a,b)=>b.tsMs.compareTo(a.tsMs)); return events;
+    if (bootCount >= 0) await sp.setInt(_snapBootKey, bootCount);
+    if (uptimeMs >= 0) await sp.setInt(_snapUptimeKey, uptimeMs);
+    events.sort((a, b) => b.tsMs.compareTo(a.tsMs));
+    return events;
   }
-  static Future<void> add(String kind, String detail) async { final sp=await SharedPreferences.getInstance(); final events=_decode(sp.getString(_eventsKey)); events.add(RecorderEvent(DateTime.now().millisecondsSinceEpoch,kind,detail)); await sp.setString(_eventsKey, jsonEncode(events.map((e)=>e.toJson()).toList())); }
-  static List<RecorderEvent> _decode(String? s){ if(s==null) return []; try { final l=jsonDecode(s) as List; return l.whereType<Map>().map((m)=>RecorderEvent.fromJson(m.map((k,v)=>MapEntry(k.toString(),v)))).toList(); } catch(_){ return []; } }
-  static int bootCount(SharedPreferences sp)=>sp.getInt('pv_boot_count')??0;
+
+  static Future<void> add(String kind, String detail) async {
+    final sp = await SharedPreferences.getInstance();
+    final events = _decode(sp.getString(_eventsKey));
+    events.add(RecorderEvent(DateTime.now().millisecondsSinceEpoch, kind, detail));
+    await sp.setString(_eventsKey, jsonEncode(events.map((e) => e.toJson()).toList()));
+  }
+
+  // --- Guided Safe Mode test ---
+  static Future<void> startSafeModeTest() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setInt(_safePendingKey, DateTime.now().millisecondsSinceEpoch);
+    await add('safe_mode_started', 'Safe Mode test started from PhoneVitals. The phone is about to be restarted into Safe Mode by hand - third-party apps (including PhoneVitals) do not run there.');
+  }
+  static Future<int?> safeModePendingSince() async {
+    final sp = await SharedPreferences.getInstance();
+    return sp.getInt(_safePendingKey);
+  }
+  static Future<void> completeSafeModeTest({required bool stable}) async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.remove(_safePendingKey);
+    await add('safe_mode_result', stable
+        ? 'Safe Mode test result: STABLE. The phone did NOT die/reboot in Safe Mode - a downloaded third-party app is the prime suspect. Remove recent apps one by one.'
+        : 'Safe Mode test result: IT DIED AGAIN in Safe Mode, where third-party apps cannot run. That rules apps out - this points to the OS or hardware (battery first).');
+  }
+
+  static List<RecorderEvent> _decode(String? s) {
+    if (s == null) return [];
+    try { final l = jsonDecode(s) as List; return l.whereType<Map>().map((m) => RecorderEvent.fromJson(m.map((k, v) => MapEntry(k.toString(), v)))).toList(); } catch (_) { return []; }
+  }
 }

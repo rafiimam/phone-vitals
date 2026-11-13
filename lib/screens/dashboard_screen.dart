@@ -4,23 +4,46 @@ import '../services/health_score.dart';
 class DashboardScreen extends StatelessWidget {
   final bool loading; final BatteryDetail? battery; final ThermalInfo? thermal; final MemoryStorage? mem; final SystemIntegrity? sys; final HealthResult health; final String deviceLine; final String androidLine; final VoidCallback onRefresh; final VoidCallback onShare;
   const DashboardScreen({super.key, required this.loading, required this.battery, required this.thermal, required this.mem, required this.sys, required this.health, required this.deviceLine, required this.androidLine, required this.onRefresh, required this.onShare});
+  Color get _band => health.score>=85 ? const Color(0xFF4ADE80) : health.score>=65 ? const Color(0xFFFBBF24) : health.score>=40 ? const Color(0xFFFB923C) : const Color(0xFFF87171);
   @override Widget build(BuildContext context){
-    final color= health.score>=85?Colors.green:health.score>=65?Colors.orange:health.score>=40?Colors.deepOrange:Colors.red;
     return RefreshIndicator(onRefresh:() async=>onRefresh(), child: ListView(padding: const EdgeInsets.all(16), children:[
-      Text(deviceLine, style: Theme.of(context).textTheme.titleLarge), Text(androidLine), const SizedBox(height:16),
-      Card(color: color.withOpacity(0.12), child: Padding(padding: const EdgeInsets.all(20), child: Column(children:[Text('${health.score}', style: TextStyle(fontSize:56,fontWeight:FontWeight.bold,color:color)), Text(health.verdict, textAlign:TextAlign.center, style: const TextStyle(fontSize:16,fontWeight:FontWeight.w600)), const SizedBox(height:8), const Text('Every value is labelled Measured / Estimated / Unavailable. No fake boost, clean or cool claims.', textAlign:TextAlign.center)]))),
-      const SizedBox(height:12),
-      if(battery!=null) _tile('Battery', '${battery!.level}% - ${battery!.status}', 'Health ${battery!.health} - Temp ${battery!.tempC.toStringAsFixed(1)}C - ${battery!.voltageMv} mV - Cycles ${battery!.cycleCount<0?'Unavailable':battery!.cycleCount} - ${battery!.technology}', Icons.battery_charging_full),
-      if(thermal!=null) _tile('Thermal', thermal!.label, 'Headroom: ${thermal!.headroom.isNaN?'Unavailable':thermal!.headroom.toStringAsFixed(2)} - Severe thermal + hot battery is a shutdown pattern', Icons.thermostat),
-      if(mem!=null) _tile('Memory & Storage', 'Storage ${mem!.storageUsedPct}% used - ${mem!.freeStorageGb.toStringAsFixed(1)} GB free', 'RAM ${mem!.totalRamMb} MB total, ${mem!.availRamMb} MB available, lowMemory=${mem!.lowMemory} - Uptime ${mem!.uptimeHours.toStringAsFixed(1)}h', Icons.storage),
-      const SizedBox(height:8), const Text('Warnings', style: TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
-      if(health.warnings.isEmpty) const Text('No warnings from the signals we can measure.'),
-      ...health.warnings.map((e)=>ListTile(leading: const Icon(Icons.warning_amber,color:Colors.orange), title: Text(e))),
-      const Text('Good signs', style: TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
-      ...health.good.map((e)=>ListTile(leading: const Icon(Icons.check_circle,color:Colors.green), title: Text(e))),
-      const SizedBox(height:12), FilledButton.icon(onPressed:onShare, icon: const Icon(Icons.share), label: const Text('Share repair report')),
-      const SizedBox(height:8), const Card(child: Padding(padding: EdgeInsets.all(12), child: Text('Hot or swollen phone? Stop. If the screen/back is lifting, it smells, or it is too hot to hold: power off, do not charge it, and take it to a shop. Back up in the first window it stays on.'))),
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: const LinearGradient(colors:[Color(0xFF17457A), Color(0xFF2E6DA8)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+          Row(children:[const Icon(Icons.phone_android, color: Colors.white70, size: 20), const SizedBox(width: 8), Expanded(child: Text(deviceLine, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)))]),
+          Text(androidLine, style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
+          const SizedBox(height: 18),
+          Row(children:[
+            SizedBox(width: 132, height: 132, child: Stack(fit: StackFit.expand, children:[
+              CircularProgressIndicator(value: health.score/100, strokeWidth: 13, backgroundColor: Colors.white24, valueColor: AlwaysStoppedAnimation<Color>(_band), strokeCap: StrokeCap.round),
+              Center(child: Column(mainAxisSize: MainAxisSize.min, children:[Text('${health.score}', style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w800, height: 1)), const Text('of 100', style: TextStyle(color: Colors.white70, fontSize: 12))])),
+            ])),
+            const SizedBox(width: 18),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+              Text(health.verdict, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              const Text('Every value is labelled Measured / Estimated / Unavailable. No fake boost, clean or cool claims.', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
+            ])),
+          ]),
+        ]),
+      ),
+      const SizedBox(height: 14),
+      if(battery!=null) _tile('Battery', '${battery!.level}% - ${battery!.status}', 'Health ${battery!.health} - Temp ${battery!.tempC.toStringAsFixed(1)}C - ${battery!.voltageMv} mV - Cycles ${battery!.cycleCount<0?'Unavailable':battery!.cycleCount} - ${battery!.technology}', Icons.battery_charging_full, const Color(0xFF2E7D32)),
+      if(thermal!=null) _tile('Thermal', thermal!.label, 'Headroom: ${thermal!.headroom.isNaN?'Unavailable':thermal!.headroom.toStringAsFixed(2)} - Severe thermal + hot battery is a shutdown pattern', Icons.thermostat, const Color(0xFFC62828)),
+      if(mem!=null) _tile('Memory & Storage', 'Storage ${mem!.storageUsedPct}% used - ${mem!.freeStorageGb.toStringAsFixed(1)} GB free', 'RAM ${mem!.totalRamMb} MB total, ${mem!.availRamMb} MB available, lowMemory=${mem!.lowMemory} - Uptime ${mem!.uptimeHours.toStringAsFixed(1)}h', Icons.storage, const Color(0xFF17457A)),
+      const SizedBox(height: 10),
+      _sectionTitle(context, 'Warnings', Icons.warning_amber, Colors.orange),
+      if(health.warnings.isEmpty) const Padding(padding: EdgeInsets.only(left: 4, bottom: 6), child: Text('No warnings from the signals we can measure.')),
+      ...health.warnings.map((e)=>Card(child: ListTile(leading: const CircleAvatar(backgroundColor: Color(0xFFFFF3E0), child: Icon(Icons.warning_amber, color: Colors.orange, size: 20)), title: Text(e)))),
+      _sectionTitle(context, 'Good signs', Icons.check_circle, Colors.green),
+      ...health.good.map((e)=>Card(child: ListTile(leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.check, color: Colors.green, size: 20)), title: Text(e)))),
+      const SizedBox(height: 14),
+      FilledButton.icon(onPressed:onShare, icon: const Icon(Icons.share), label: const Text('Share repair report')),
+      const SizedBox(height: 10),
+      const Card(color: Color(0xFFFFF3E0), child: Padding(padding: EdgeInsets.all(14), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children:[Icon(Icons.local_fire_department, color: Colors.deepOrange), SizedBox(width: 10), Expanded(child: Text('Hot or swollen phone? Stop. If the screen/back is lifting, it smells, or it is too hot to hold: power off, do not charge it, and take it to a shop. Back up in the first window it stays on.'))]))),
     ]));
   }
-  Widget _tile(String t,String s,String d,IconData i)=>Card(child: ListTile(leading: Icon(i), title: Text(t), subtitle: Text('$s\n$d'), isThreeLine:true));
+  Widget _sectionTitle(BuildContext c, String t, IconData i, Color col)=>Padding(padding: const EdgeInsets.only(top: 10, bottom: 6, left: 4), child: Row(children:[Icon(i, size: 19, color: col), const SizedBox(width: 7), Text(t, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF12283F)))]));
+  Widget _tile(String t,String s,String d,IconData i,Color col)=>Card(child: ListTile(contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), leading: CircleAvatar(backgroundColor: col.withOpacity(0.12), child: Icon(i, color: col)), title: Text(t, style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('$s\n$d'), isThreeLine:true));
 }

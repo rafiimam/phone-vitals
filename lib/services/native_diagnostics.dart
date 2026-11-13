@@ -12,6 +12,7 @@ class NativeDiagnostics {
   static Future<List<Map<String,dynamic>>> sensors() async { try { final l = await _ch.invokeMethod('getSensors'); if (l is List) return l.whereType<Map>().map((m)=>m.map((k,v)=>MapEntry(k.toString(), v))).toList(); } catch (_) {} return []; }
   static Future<List<AppInfoItem>> installedApps() async { try { final l = await _ch.invokeMethod('getInstalledApps'); if (l is List) return l.whereType<Map>().map(AppInfoItem.fromMap).toList(); } catch (_) {} return []; }
   static Future<SystemIntegrity?> systemIntegrity() async { try { final m = await _ch.invokeMethod('getSystemIntegrity'); if (m is Map) return SystemIntegrity.fromMap(m); } catch (_) {} return null; }
+  static Future<Map<String,dynamic>> bootInfo() async { try { final m = await _ch.invokeMethod('getBootInfo'); if (m is Map) return m.map((k,v)=>MapEntry(k.toString(), v)); } catch (_) {} return {}; }
   static Future<bool> hasUsageAccess() async { try { return await _ch.invokeMethod('hasUsageAccess') == true; } catch (_) { return false; } }
   static Future<void> openUsageAccessSettings() async { try { await _ch.invokeMethod('openUsageAccessSettings'); } catch (_) {} }
   static Future<List<Map<String,dynamic>>> usageStats() async { try { final l = await _ch.invokeMethod('getUsageStats'); if (l is List) return l.whereType<Map>().map((m)=>m.map((k,v)=>MapEntry(k.toString(), v))).toList(); } catch (_) {} return []; }

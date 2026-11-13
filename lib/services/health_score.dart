@@ -17,7 +17,8 @@ HealthResult evaluateHealth({BatteryDetail? b, ThermalInfo? t, MemoryStorage? ms
   }
   if (t!=null) { if (t.status>=3) { score-=20; w.add('Thermal status: ${t.label} - phone is throttling to protect itself'); } else { g.add('Thermal: ${t.label} (Measured)'); } }
   if (sys!=null) { final age=sys.patchAgeDays; if (age>180) { score-=10; w.add('Security patch is $age days old (${sys.securityPatch}) - check for a system update'); } if (sys.rootSuspected) { score-=8; w.add('Root / modified system suspected: ${sys.rootClues.join(', ')} - this can break updates and banking apps'); } if (sys.verifiedBootState=='orange' || sys.verifiedBootState=='red') { score-=15; w.add('Verified Boot state: ${sys.verifiedBootState} - bootloader unlocked / system may be modified'); } }
-  if (uncleanCount>=3) { score-=15; w.add('$uncleanCount unclean exits recorded - failure is repeating, back up today'); }
+  if (uncleanCount==1) { score-=10; w.add('1 unexpected reboot recorded (boot count changed, no clean shutdown) - note the battery % and what you were doing, and back up'); }
+  else if (uncleanCount>=2) { score-=15; w.add('$uncleanCount unexpected reboots recorded - failure is repeating, back up today'); }
   score=score.clamp(0,100);
   final verdict= score>=85?'Healthy':score>=65?'Mostly OK - watch the warnings':score>=40?'Struggling - follow the Verdict Wizard':'Critical - back up NOW, hardware fault is likely';
   return HealthResult(score, verdict, w, g);
