@@ -14,6 +14,9 @@ import android.app.Activity
 import android.content.ContentUris
 import android.net.Uri
 import android.provider.MediaStore
+import android.app.ApplicationExitInfo
+import android.app.usage.StorageStatsManager
+import android.os.storage.StorageManager
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -44,6 +47,9 @@ class MainActivity : FlutterActivity() {
                     "listSharedFiles" -> result.success(sharedFiles())
                     "getBootInfo" -> result.success(bootInfo())
                     "deleteFiles" -> { val u = (call.argument<List<String>>("uris") ?: emptyList()); val p = (call.argument<List<String>>("paths") ?: emptyList()); deleteFiles(u, p, result) }
+                    "getAppStorageStats" -> appStorageStatsAsync(result)
+                    "openAppSettings" -> { val pkg = call.argument<String>("package") ?: ""; try { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) {}; result.success(true) }
+                    "getOwnExitReasons" -> result.success(ownExitReasons())
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) { result.success(null) }
@@ -238,5 +244,54 @@ class MainActivity : FlutterActivity() {
             } else { r?.success(false) }
         }
     }
-}
 
+    /// Cache Radar data: per-UID app/data/cache bytes via StorageStatsManager.
+    /// Only works when the user has granted Usage Access (PACKAGE_USAGE_STATS);
+    /// returns empty otherwise. Runs on a worker thread - 100+ packages is slow.
+    private fun appStorageStatsAsync(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < 26) { result.success(emptyList<Map<String, Any?>>()); return }
+        if (!hasUsageAccess()) { result.success(emptyList<Map<String, Any?>>()); return }
+        Thread {
+            val out = mutableListOf<Map<String, Any?>>()
+            try {
+                val ssm = getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+                val sm = getSystemService(Context.STORAGE_SERVICE) as StorageManager
+                val uuid = sm.getUuidForPath(Environment.getDataDirectory())
+                val pm = packageManager
+                val apps = try { pm.getInstalledApplications(0) } catch (e: Exception) { emptyList<ApplicationInfo>() }
+                for (ai in apps) {
+                    try { val st = ssm.queryStatsForUid(uuid, ai.uid); out.add(mapOf("packageName" to ai.packageName, "appBytes" to st.appBytes, "dataBytes" to st.dataBytes, "cacheBytes" to st.cacheBytes)) } catch (e: Exception) {}
+                }
+            } catch (e: Throwable) {}
+            runOnUiThread { try { result.success(out) } catch (e: Exception) {} }
+        }.start()
+    }
+
+    /// ApplicationExitInfo: Android stores exit reasons ONLY for the caller's
+    /// own UID (other packages need the DUMP signature permission). This is
+    /// the recorder's self-awareness: was BlackBox MD itself force-stopped,
+    /// low-memory killed, or did it crash between sessions?
+    private fun ownExitReasons(): List<Map<String, Any?>> {
+        if (Build.VERSION.SDK_INT < 30) return emptyList()
+        return try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            am.getHistoricalProcessExitReasons(packageName, 0, 10).map { ei ->
+                val label = when (ei.reason) {
+                    ApplicationExitInfo.REASON_EXIT_SELF -> "Exited normally"
+                    ApplicationExitInfo.REASON_SIGNALED -> "Killed by a system signal"
+                    ApplicationExitInfo.REASON_LOW_MEMORY -> "Killed: system was low on memory"
+                    ApplicationExitInfo.REASON_CRASH -> "BlackBox MD crashed"
+                    ApplicationExitInfo.REASON_CRASH_NATIVE -> "BlackBox MD native crash"
+                    ApplicationExitInfo.REASON_ANR -> "BlackBox MD stopped responding (ANR)"
+                    ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "Initialization failure"
+                    ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "Killed: permission change"
+                    ApplicationExitInfo.REASON_USER_REQUESTED -> "Force-stopped / swiped away by user or battery manager"
+                    ApplicationExitInfo.REASON_USER_STOPPED -> "Stopped by user"
+                    ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "A dependency process died"
+                    else -> "Other (code ${ei.reason})"
+                }
+                mapOf("reason" to label, "timeMs" to ei.timestamp, "description" to (ei.description ?: ""))
+            }
+        } catch (e: Exception) { emptyList() }
+    }
+}

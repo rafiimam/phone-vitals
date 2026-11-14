@@ -21,4 +21,13 @@ class NativeDiagnostics {
   /// consent dialog approves the exact batch; returns false if the user
   /// cancelled or anything failed - the UI must then say nothing was deleted.
   static Future<bool> deleteFiles({required List<String> uris, required List<String> paths}) async { try { return await _ch.invokeMethod('deleteFiles', {'uris': uris, 'paths': paths}) == true; } catch (_) { return false; } }
+  /// Cache Radar: per-app app/data/cache bytes from Android's
+  /// StorageStatsManager. Requires the user-granted Usage Access
+  /// (PACKAGE_USAGE_STATS); empty without it - never estimated.
+  static Future<List<Map<String,dynamic>>> appStorageStats() async { try { final l = await _ch.invokeMethod('getAppStorageStats'); if (l is List) return l.whereType<Map>().map((m)=>m.map((k,v)=>MapEntry(k.toString(), v))).toList(); } catch (_) {} return []; }
+  static Future<void> openAppSettings(String packageName) async { try { await _ch.invokeMethod('openAppSettings', {'package': packageName}); } catch (_) {} }
+  /// Android keeps process-exit reasons ONLY for our own UID
+  /// (ApplicationExitInfo). This tells us if BlackBox MD itself was
+  /// force-stopped, low-memory killed or crashed - recorder self-awareness.
+  static Future<List<Map<String,dynamic>>> ownExitReasons() async { try { final l = await _ch.invokeMethod('getOwnExitReasons'); if (l is List) return l.whereType<Map>().map((m)=>m.map((k,v)=>MapEntry(k.toString(), v))).toList(); } catch (_) {} return []; }
 }

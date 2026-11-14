@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/diagnostics.dart';
 /// The "black box" - v2.
@@ -48,7 +49,7 @@ class Recorder {
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final bootWall = uptimeMs >= 0 ? nowMs - uptimeMs : nowMs;
       if (prevClean) {
-        events.add(RecorderEvent(bootWall, 'reboot_clean', 'Phone restarted with a clean shutdown signal (power menu or system update). Not a failure - recorded so real failures stand out.'));
+        events.add(_chained(events, bootWall, 'reboot_clean', 'Phone restarted with a clean shutdown signal (power menu or system update). Not a failure - recorded so real failures stand out.'));
       } else {
         var vit = '';
         try {
@@ -56,7 +57,7 @@ class Recorder {
           if (raw != null) { final m = jsonDecode(raw) as Map; vit = ' Last heartbeat before it: battery ${m['pct']}%, temp ${m['temp']}C, thermal ${m['thermal']}.'; }
         } catch (_) {}
         final beat = sp.getInt(_heartbeatKey);
-        events.add(RecorderEvent(beat ?? bootWall, 'unexpected_reboot', 'Phone rebooted and NO clean shutdown was recorded - it died, crashed or lost power.$vit Detection: Android boot count changed. The kernel reason itself is hidden from normal apps, so this is inferred - but the reboot is real.'));
+        events.add(_chained(events, beat ?? bootWall, 'unexpected_reboot', 'Phone rebooted and NO clean shutdown was recorded - it died, crashed or lost power.$vit Detection: Android boot count changed. The kernel reason itself is hidden from normal apps, so this is inferred - but the reboot is real.'));
       }
       await sp.setInt(_loggedBootKey, bootKey);
       await sp.setString(_eventsKey, jsonEncode(events.map((e) => e.toJson()).toList()));
@@ -67,10 +68,22 @@ class Recorder {
     return events;
   }
 
+  /// Tamper-evident case chain: every event's hash covers the previous
+  /// event's hash, its timestamp, kind and detail. Editing, deleting or
+  /// reordering any entry breaks every later hash - a repair shop (or a
+  /// court of common sense) can recompute the chain from the exported
+  /// report and see whether the case file was altered after the fact.
+  static String _chainFor(List<RecorderEvent> existing, int ts, String kind, String detail) {
+    final prev = existing.isEmpty ? 'GENESIS' : (existing.last.chain.isNotEmpty ? existing.last.chain : 'LEGACY');
+    return sha256.convert(utf8.encode('$prev|$ts|$kind|$detail')).toString();
+  }
+  static RecorderEvent _chained(List<RecorderEvent> existing, int ts, String kind, String detail) =>
+      RecorderEvent(ts, kind, detail, chain: _chainFor(existing, ts, kind, detail));
+
   static Future<void> add(String kind, String detail) async {
     final sp = await SharedPreferences.getInstance();
     final events = _decode(sp.getString(_eventsKey));
-    events.add(RecorderEvent(DateTime.now().millisecondsSinceEpoch, kind, detail));
+    events.add(_chained(events, DateTime.now().millisecondsSinceEpoch, kind, detail));
     await sp.setString(_eventsKey, jsonEncode(events.map((e) => e.toJson()).toList()));
   }
 

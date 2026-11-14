@@ -15,9 +15,10 @@ class CaseFileScreen extends StatelessWidget {
   final MemoryStorage? mem;
   final SystemIntegrity? sys;
   final String deviceLine;
+  final List<String> changes;
   final VoidCallback onOpenWizard;
   final VoidCallback onShare;
-  const CaseFileScreen({super.key, required this.events, required this.health, required this.battery, required this.mem, required this.sys, required this.deviceLine, required this.onOpenWizard, required this.onShare});
+  const CaseFileScreen({super.key, required this.events, required this.health, required this.battery, required this.mem, required this.sys, required this.deviceLine, required this.changes, required this.onOpenWizard, required this.onShare});
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +87,7 @@ class CaseFileScreen extends StatelessWidget {
         )),
       _board('Ruled out by evidence', ruledOut, Icons.check_circle, const Color(0xFF2E7D32), 'Nothing ruled out yet - the tests below produce the evidence.'),
       _board('Still suspect', suspects, Icons.help_outline, const Color(0xFFEF6C00), 'No suspects yet - if the phone misbehaves, suspects appear here.'),
+      if (changes.isNotEmpty) _board('What changed since last check', changes.take(5).toList(), Icons.compare_arrows, const Color(0xFF00838F), ''),
       const SizedBox(height: 8),
       Container(
         padding: const EdgeInsets.all(16),
