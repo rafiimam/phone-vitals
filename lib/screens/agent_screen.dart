@@ -29,6 +29,8 @@ class _AgentState extends State<AgentScreen> {
   final TextEditingController _input = TextEditingController();
   AgentSettings _settings = AgentSettings();
   bool _busy = false;
+  bool _searching = false;
+  bool _searched = false;
 
   @override
   void initState() {
@@ -38,15 +40,38 @@ class _AgentState extends State<AgentScreen> {
 
   Future<void> _loadSettings() async {
     final s = await AgentSettings.load();
-    if (mounted) setState(() => _settings = s);
+    if (!mounted) return;
+    setState(() => _settings = s);
+    if (!s.configured) _autoConnect();
+  }
+
+  /// The app should just work: on open, if no brain is configured, scan the
+  /// Wi-Fi for Ollama and connect automatically. Manual settings (gear)
+  /// remain only as an override.
+  Future<void> _autoConnect() async {
+    if (_searching) return;
+    setState(() => _searching = true);
+    final found = await DoctorBrain.discoverOllama();
+    if (!mounted) return;
+    setState(() {
+      _searching = false;
+      _searched = true;
+      if (found != null) _settings = found;
+    });
+    if (found != null) {
+      setState(() => _msgs.add(_Msg(false, 'Auto-connected to Ollama at ${found.baseUrl} with model ${found.model}. I have your case file - ask me anything about your phone.')));
+    }
   }
 
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _busy) return;
     if (!_settings.configured) {
-      _openSettings();
-      return;
+      await _autoConnect();
+      if (!_settings.configured) {
+        if (mounted) _openSettings();
+        return;
+      }
     }
     _input.clear();
     setState(() {
@@ -149,14 +174,18 @@ class _AgentState extends State<AgentScreen> {
           child: DoctorCard(
             mode: DoctorMode.exam,
             speech: _settings.configured
-                ? 'I have your full case file in front of me - the black-box record, measurements and what changed. Ask me what is wrong, what to test next, or what to tell the repair shop.'
-                : 'My brain is an open-source language model that you connect - your computer running Ollama, or a free open-model API. Tap the gear (top right) to connect me, then ask about your phone\'s case.',
+                ? 'Connected: ${_settings.model} at ${_settings.baseUrl}. I have your full case file in front of me - ask me what is wrong, what to test next, or what to tell the repair shop.'
+                : _searching
+                    ? 'I am scanning this Wi-Fi for my brain (an Ollama server on your computer)... one moment.'
+                    : 'I auto-connect to Ollama on your Wi-Fi - no typing needed. If your computer runs Ollama, keep the phone on the same Wi-Fi and tap Retry. Manual setup hides under the gear (top right).',
           ),
         ),
         if (!_settings.configured)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: FilledButton.icon(onPressed: _openSettings, icon: const Icon(Icons.psychology_alt), label: const Text('Connect the doctor\'s brain')),
+            child: _searching
+                ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 10), Text('Scanning Wi-Fi for Ollama...')])
+                : FilledButton.icon(onPressed: _autoConnect, icon: const Icon(Icons.wifi_find), label: Text(_searched ? 'Retry auto-connect' : 'Auto-connect')),
           ),
         Expanded(
           child: ListView.builder(

@@ -94,7 +94,7 @@ HONESTY RULES - never break these:
 
 At the very end of your reply, on its own line, output exactly one action token if an in-app step fits, chosen from: [[ACTION:SAFE_MODE]] [[ACTION:STORAGE]] [[ACTION:APPS]] [[ACTION:SHARE]] - or no token if none fits. The app turns the token into a button; do not explain the token.''';
 
-  static AgentReply _parse(String raw) {
+  static AgentReply parseReply(String raw) {
     final m = RegExp(r'\[\[ACTION:(\w+)\]\]').firstMatch(raw);
     if (m == null) return AgentReply(raw.trim(), null);
     return AgentReply(raw.replaceAll(m.group(0)!, '').trim(), m.group(1));
@@ -136,7 +136,7 @@ At the very end of your reply, on its own line, output exactly one action token 
         content = (((j['choices'] as List?)?.first as Map?)?['message'] as Map?)?['content']?.toString() ?? '';
       }
       if (content.trim().isEmpty) return const AgentReply('The model replied with an empty answer. Try again, or check the model name in Agent settings.', null);
-      return _parse(content);
+      return parseReply(content);
     } on SocketException catch (e) {
       return AgentReply('I could not reach the model endpoint (${e.message}). Check: is Ollama/your server running, is the phone on the same Wi-Fi, and is the address in Agent settings right? Nothing about your phone changed - this is only the agent connection.', null);
     } on TimeoutException {
@@ -146,5 +146,86 @@ At the very end of your reply, on its own line, output exactly one action token 
     } finally {
       client.close();
     }
+  }
+
+  /// Zero-config auto-connect: scan the phone's own Wi-Fi subnet for an
+  /// Ollama server (port 11434), read its model list, pick a chat model
+  /// and save the settings - the user never types an address. Raw dart:io
+  /// sockets are used for the scan, so no extra permissions are needed.
+  static Future<List<String>> _ollamaModels(String base) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 4);
+    try {
+      final req = await client.getUrl(Uri.parse('$base/api/tags'));
+      final resp = await req.close().timeout(const Duration(seconds: 6));
+      if (resp.statusCode != 200) return [];
+      final body = await resp.transform(utf8.decoder).join();
+      final j = jsonDecode(body) as Map;
+      return ((j['models'] as List?) ?? []).map((m) => (m as Map)['name']?.toString() ?? '').where((n) => n.isNotEmpty).toList();
+    } catch (_) {
+      return [];
+    } finally {
+      client.close();
+    }
+  }
+
+  static Future<AgentSettings?> discoverOllama() async {
+    try {
+      // Also try this device itself first (Ollama via Termux etc.).
+      for (final base in ['http://127.0.0.1:11434']) {
+        final models = await _ollamaModels(base);
+        if (models.isNotEmpty) return _pick(base, models);
+      }
+      final ifs = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLoopback: false);
+      final prefixes = <String>{};
+      for (final ni in ifs) {
+        for (final a in ni.addresses) {
+          final parts = a.address.split('.');
+          if (parts.length == 4 && parts[0] != '169') prefixes.add('${parts[0]}.${parts[1]}.${parts[2]}');
+        }
+      }
+      final hosts = <String>[];
+      for (final p in prefixes) {
+        for (int i = 1; i <= 254; i++) {
+          hosts.add('$p.$i');
+        }
+      }
+      String? found;
+      for (int s = 0; s < hosts.length && found == null; s += 48) {
+        final end = s + 48 > hosts.length ? hosts.length : s + 48;
+        final results = await Future.wait(hosts.sublist(s, end).map((h) async {
+          try {
+            final sock = await Socket.connect(h, 11434, timeout: const Duration(milliseconds: 220));
+            sock.destroy();
+            return h;
+          } catch (_) {
+            return null;
+          }
+        }));
+        for (final r in results) {
+          if (r != null) {
+            found = r;
+            break;
+          }
+        }
+      }
+      if (found == null) return null;
+      final base = 'http://$found:11434';
+      final models = await _ollamaModels(base);
+      if (models.isEmpty) return null;
+      return _pick(base, models);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<AgentSettings> _pick(String base, List<String> models) async {
+    final model = models.firstWhere(
+      (m) => m.toLowerCase().contains('qwen'),
+      orElse: () => models.firstWhere((m) => m.toLowerCase().contains('llama'), orElse: () => models.first),
+    );
+    final s = AgentSettings(mode: 'ollama', baseUrl: base, model: model);
+    await s.save();
+    return s;
   }
 }

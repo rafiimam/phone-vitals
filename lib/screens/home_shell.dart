@@ -39,11 +39,13 @@ class _HomeShellState extends State<HomeShell> {
     }
     if(mounted) setState(()=>_loading=false);
   }
-  void _openAgent(){
+  String _caseContext(){
     final appFlags=scanApps(_apps,{}).map((f)=>'${f.app.label}: ${f.flags.join('; ')}').toList();
     final fileFlags=scanFiles(_files).map((f)=>'${f.kind}: ${f.path}').toList();
-    final ctx=DoctorBrain.buildContext(deviceLine:_deviceLine, androidLine:_androidLine, health:_health, b:_battery, t:_thermal, ms:_mem, sys:_sys, events:_events, changes:_changes, appFlags:appFlags, fileFlags:fileFlags);
-    Navigator.push(context, MaterialPageRoute(builder:(_)=>AgentScreen(caseContext:ctx, onOpenWizard:()=>setState(()=>_idx=6), onOpenApps:()=>setState(()=>_idx=2), onOpenFiles:()=>setState(()=>_idx=3), onShare:_shareReport)));
+    return DoctorBrain.buildContext(deviceLine:_deviceLine, androidLine:_androidLine, health:_health, b:_battery, t:_thermal, ms:_mem, sys:_sys, events:_events, changes:_changes, appFlags:appFlags, fileFlags:fileFlags);
+  }
+  void _openAgent(){
+    Navigator.push(context, MaterialPageRoute(builder:(_)=>AgentScreen(caseContext:_caseContext(), onOpenWizard:()=>setState(()=>_idx=6), onOpenApps:()=>setState(()=>_idx=2), onOpenFiles:()=>setState(()=>_idx=3), onShare:_shareReport)));
   }
   HealthResult get _health=>evaluateHealth(b:_battery,t:_thermal,ms:_mem,sys:_sys,uncleanCount:_events.where((e)=>e.kind=='unexpected_reboot').length);
   Future<void> _shareReport() async {
@@ -54,7 +56,7 @@ class _HomeShellState extends State<HomeShell> {
   }
   @override Widget build(BuildContext context){
     final pages=[
-      CaseFileScreen(events:_events, health:_health, battery:_battery, mem:_mem, sys:_sys, deviceLine:_deviceLine, changes:_changes, onOpenWizard:()=>setState(()=>_idx=6), onShare:_shareReport),
+      CaseFileScreen(events:_events, health:_health, battery:_battery, mem:_mem, sys:_sys, deviceLine:_deviceLine, changes:_changes, caseContext:_caseContext(), onOpenAgent:_openAgent, onOpenWizard:()=>setState(()=>_idx=6), onOpenApps:()=>setState(()=>_idx=2), onOpenFiles:()=>setState(()=>_idx=3), onShare:_shareReport),
       DashboardScreen(loading:_loading,battery:_battery,thermal:_thermal,mem:_mem,sys:_sys,health:_health,deviceLine:_deviceLine,androidLine:_androidLine,onRefresh:_load,onShare:_shareReport),
       AppsScanScreen(apps:_apps),
       FilesScanScreen(files:_files, onFilesChanged:_load),

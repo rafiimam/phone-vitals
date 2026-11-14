@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/diagnostics.dart';
 import '../services/health_score.dart';
 import '../widgets/doctor_avatar.dart';
+import '../widgets/ai_assessment.dart';
 
 /// The Case File - BlackBox MD's flagship screen.
 /// Not a snapshot: an open investigation. The black-box recorder supplies
@@ -16,9 +17,13 @@ class CaseFileScreen extends StatelessWidget {
   final SystemIntegrity? sys;
   final String deviceLine;
   final List<String> changes;
+  final String caseContext;
+  final VoidCallback onOpenAgent;
+  final VoidCallback onOpenApps;
+  final VoidCallback onOpenFiles;
   final VoidCallback onOpenWizard;
   final VoidCallback onShare;
-  const CaseFileScreen({super.key, required this.events, required this.health, required this.battery, required this.mem, required this.sys, required this.deviceLine, required this.changes, required this.onOpenWizard, required this.onShare});
+  const CaseFileScreen({super.key, required this.events, required this.health, required this.battery, required this.mem, required this.sys, required this.deviceLine, required this.changes, required this.caseContext, required this.onOpenAgent, required this.onOpenWizard, required this.onOpenApps, required this.onOpenFiles, required this.onShare});
 
   @override
   Widget build(BuildContext context) {
