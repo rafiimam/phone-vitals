@@ -37,9 +37,9 @@ class _AiAssessmentState extends State<AiAssessmentCard> {
   Future<void> _run() async {
     if (_started) return;
     _started = true;
-    final s = await AgentSettings.load();
+    final s = await DoctorBrain.resolveBrain();
     if (!mounted) return;
-    if (!s.configured) {
+    if (s == null) {
       setState(() => _noBrain = true);
       return;
     }
@@ -107,7 +107,7 @@ class _AiAssessmentState extends State<AiAssessmentCard> {
         child: ListTile(
           leading: const Icon(Icons.psychology_alt, color: Color(0xFF17457A)),
           title: const Text('AI assessment is off', style: TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: const Text('Connect the doctor\'s brain (Ollama auto-connects on your Wi-Fi) and the Case File will open with an AI assessment of your evidence.'),
+          subtitle: const Text('Give the doctor a brain - download it into the phone from the Agent tab, or auto-connect Ollama - and the Case File opens with an AI assessment of your evidence.'),
           trailing: FilledButton(onPressed: widget.onOpenAgent, child: const Text('Connect')),
         ),
       );

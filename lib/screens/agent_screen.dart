@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/doctor_brain.dart';
+import '../services/native_diagnostics.dart';
 import '../widgets/doctor_avatar.dart';
 
 class _Msg {
@@ -31,6 +32,9 @@ class _AgentState extends State<AgentScreen> {
   bool _busy = false;
   bool _searching = false;
   bool _searched = false;
+  bool _brainReady = false;
+  bool _downloading = false;
+  double? _dlProgress;
 
   @override
   void initState() {
@@ -39,10 +43,37 @@ class _AgentState extends State<AgentScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final s = await AgentSettings.load();
+    final info = await NativeDiagnostics.llmModelInfo();
+    _brainReady = info['exists'] == true;
+    final brain = await DoctorBrain.resolveBrain();
     if (!mounted) return;
-    setState(() => _settings = s);
-    if (!s.configured) _autoConnect();
+    if (brain != null) {
+      setState(() => _settings = brain);
+      return;
+    }
+    final s = await AgentSettings.load();
+    if (mounted) setState(() => _settings = s);
+    _autoConnect();
+  }
+
+  Future<void> _download() async {
+    setState(() {
+      _downloading = true;
+      _dlProgress = 0;
+    });
+    final ok = await DoctorBrain.downloadBrain(onProgress: (p) {
+      if (mounted) setState(() => _dlProgress = p);
+    });
+    if (!mounted) return;
+    setState(() {
+      _downloading = false;
+      _dlProgress = null;
+      _brainReady = ok;
+      if (ok) _settings = AgentSettings(mode: 'ondevice', model: 'Qwen2.5-1.5B (on-device)');
+    });
+    if (ok) {
+      setState(() => _msgs.add(const _Msg(false, 'My brain is installed - Qwen2.5-1.5B now lives inside your phone. No internet, no computer needed. Ask me about your case.')));
+    }
   }
 
   /// The app should just work: on open, if no brain is configured, scan the
@@ -68,10 +99,7 @@ class _AgentState extends State<AgentScreen> {
     if (text.isEmpty || _busy) return;
     if (!_settings.configured) {
       await _autoConnect();
-      if (!_settings.configured) {
-        if (mounted) _openSettings();
-        return;
-      }
+      if (!_settings.configured) return; // download / connect options are on screen
     }
     _input.clear();
     setState(() {
@@ -183,9 +211,21 @@ class _AgentState extends State<AgentScreen> {
         if (!_settings.configured)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: _searching
-                ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 10), Text('Scanning Wi-Fi for Ollama...')])
-                : FilledButton.icon(onPressed: _autoConnect, icon: const Icon(Icons.wifi_find), label: Text(_searched ? 'Retry auto-connect' : 'Auto-connect')),
+            child: Column(children: [
+              if (!_brainReady)
+                _downloading
+                    ? Column(children: [
+                        LinearProgressIndicator(value: _dlProgress),
+                        const SizedBox(height: 6),
+                        Text('Downloading the doctor\'s brain... ${((_dlProgress ?? 0) * 100).toStringAsFixed(0)}% of ~1.6 GB. Keep the app open.'),
+                      ])
+                    : FilledButton.icon(onPressed: _download, icon: const Icon(Icons.download_for_offline), label: const Text('Download my brain into this phone (~1.6 GB, one time)')),
+              const SizedBox(height: 8),
+              if (_searching)
+                const Row(mainAxisAlignment: MainAxisAlignment.center, children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 10), Text('Scanning Wi-Fi for Ollama...')])
+              else
+                OutlinedButton.icon(onPressed: _autoConnect, icon: const Icon(Icons.wifi_find), label: Text(_searched ? 'Retry Ollama auto-connect' : 'Or auto-connect to Ollama on Wi-Fi')),
+            ]),
           ),
         Expanded(
           child: ListView.builder(

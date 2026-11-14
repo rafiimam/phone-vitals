@@ -15,6 +15,8 @@ import android.content.ContentUris
 import android.net.Uri
 import android.provider.MediaStore
 import android.app.ApplicationExitInfo
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import java.io.File
 import android.app.usage.StorageStatsManager
 import android.os.storage.StorageManager
 import android.provider.Settings
@@ -50,6 +52,8 @@ class MainActivity : FlutterActivity() {
                     "getAppStorageStats" -> appStorageStatsAsync(result)
                     "openAppSettings" -> { val pkg = call.argument<String>("package") ?: ""; try { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) {}; result.success(true) }
                     "getOwnExitReasons" -> result.success(ownExitReasons())
+                    "llmModelInfo" -> { val f = brainFile(); result.success(mapOf("path" to f.absolutePath, "exists" to f.exists(), "sizeBytes" to if (f.exists()) f.length() else 0L)) }
+                    "llmGenerate" -> { val prompt = call.argument<String>("prompt") ?: ""; llmGenerateAsync(prompt, result) }
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) { result.success(null) }
@@ -293,5 +297,24 @@ class MainActivity : FlutterActivity() {
                 mapOf("reason" to label, "timeMs" to ei.timestamp, "description" to (ei.description ?: ""))
             }
         } catch (e: Exception) { emptyList() }
+    }
+
+    // ---- On-device brain (Phase 3b): MediaPipe LLM Inference ----
+    private fun brainFile(): File = File(filesDir, "dr_brain.task")
+    @Volatile private var llm: LlmInference? = null
+
+    private fun llmGenerateAsync(prompt: String, result: MethodChannel.Result) {
+        Thread {
+            try {
+                val f = brainFile()
+                if (!f.exists()) { runOnUiThread { result.error("NO_MODEL", "On-device model not downloaded", null) }; return@Thread }
+                val options = LlmInference.LlmInferenceOptions.builder().setModelPath(f.absolutePath).setMaxTokens(4096).build()
+                val engine = llm ?: LlmInference.createFromOptions(applicationContext, options).also { llm = it }
+                val out = engine.generateResponse(prompt) ?: ""
+                runOnUiThread { try { result.success(out) } catch (e: Exception) {} }
+            } catch (e: Throwable) {
+                runOnUiThread { try { result.error("LLM_ERROR", e.message ?: e.toString(), null) } catch (x: Exception) {} }
+            }
+        }.start()
     }
 }

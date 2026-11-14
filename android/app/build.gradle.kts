@@ -32,3 +32,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // On-device LLM (Phase 3b): MediaPipe LLM Inference API (LiteRT stack).
+    implementation("com.google.mediapipe:tasks-genai:0.10.27")
+}

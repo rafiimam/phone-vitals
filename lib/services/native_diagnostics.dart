@@ -29,5 +29,7 @@ class NativeDiagnostics {
   /// Android keeps process-exit reasons ONLY for our own UID
   /// (ApplicationExitInfo). This tells us if BlackBox MD itself was
   /// force-stopped, low-memory killed or crashed - recorder self-awareness.
+  static Future<Map<String,dynamic>> llmModelInfo() async { try { final m = await _ch.invokeMethod('llmModelInfo'); if (m is Map) return m.map((k,v)=>MapEntry(k.toString(), v)); } catch (_) {} return {'exists': false, 'sizeBytes': 0, 'path': ''}; }
+  static Future<String> llmGenerate(String prompt) async { final r = await _ch.invokeMethod('llmGenerate', {'prompt': prompt}); return r?.toString() ?? ''; }
   static Future<List<Map<String,dynamic>>> ownExitReasons() async { try { final l = await _ch.invokeMethod('getOwnExitReasons'); if (l is List) return l.whereType<Map>().map((m)=>m.map((k,v)=>MapEntry(k.toString(), v))).toList(); } catch (_) {} return []; }
 }

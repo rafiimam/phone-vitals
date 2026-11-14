@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/diagnostics.dart';
+import 'native_diagnostics.dart';
 import 'health_score.dart';
 
 /// The Doctor Agent's brain.
@@ -19,7 +20,7 @@ class AgentSettings {
   String model;
   String apiKey;
   AgentSettings({this.mode = 'ollama', this.baseUrl = '', this.model = '', this.apiKey = ''});
-  bool get configured => baseUrl.trim().isNotEmpty && model.trim().isNotEmpty;
+  bool get configured => mode == 'ondevice' ? model.trim().isNotEmpty : (baseUrl.trim().isNotEmpty && model.trim().isNotEmpty);
   static Future<AgentSettings> load() async {
     final sp = await SharedPreferences.getInstance();
     return AgentSettings(
@@ -100,6 +101,53 @@ At the very end of your reply, on its own line, output exactly one action token 
     return AgentReply(raw.replaceAll(m.group(0)!, '').trim(), m.group(1));
   }
 
+  /// Brain priority: a brain the user deliberately configured first, then
+  /// the on-device model if it has been downloaded. Null = no brain yet.
+  static Future<AgentSettings?> resolveBrain() async {
+    final s = await AgentSettings.load();
+    if (s.configured) return s;
+    final info = await NativeDiagnostics.llmModelInfo();
+    if (info['exists'] == true) return AgentSettings(mode: 'ondevice', model: 'Qwen2.5-1.5B (on-device)');
+    return null;
+  }
+
+  /// The on-device brain: Qwen2.5-1.5B-Instruct (Apache-2.0), converted by
+  /// Google's litert-community for the MediaPipe/LiteRT stack, public and
+  /// ungated on Hugging Face - downloaded once, at runtime, into the app's
+  /// private storage. q8 weights, 4096-token KV cache (our case prompts
+  /// are long). ~1.6 GB one-time download; fully offline afterwards.
+  static const brainUrl = 'https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task';
+
+  static Future<bool> downloadBrain({required void Function(double) onProgress}) async {
+    final info = await NativeDiagnostics.llmModelInfo();
+    final path = info['path']?.toString() ?? '';
+    if (path.isEmpty) return false;
+    final part = File('$path.part');
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(Uri.parse(brainUrl));
+      final resp = await req.close();
+      if (resp.statusCode != 200) return false;
+      final total = resp.contentLength;
+      var received = 0;
+      final sink = part.openWrite();
+      await for (final chunk in resp) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0) onProgress(received / total);
+      }
+      await sink.close();
+      if (total > 0 && received != total) return false;
+      await part.rename(path);
+      await AgentSettings(mode: 'ondevice', model: 'Qwen2.5-1.5B (on-device)').save();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close();
+    }
+  }
+
   static Future<AgentReply> ask({
     required AgentSettings s,
     required String system,
@@ -112,6 +160,23 @@ At the very end of your reply, on its own line, output exactly one action token 
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 12);
     try {
+      if (s.mode == 'ondevice') {
+        // Qwen2.5 chat template (ChatML), applied by hand - the runtime
+        // does not template prompts for us.
+        final buf = StringBuffer();
+        buf.writeln('<|im_start|>system');
+        buf.writeln(system);
+        buf.writeln('<|im_end|>');
+        for (final m in history) {
+          buf.writeln('<|im_start|>${m['role'] == 'user' ? 'user' : 'assistant'}');
+          buf.writeln(m['content'] ?? '');
+          buf.writeln('<|im_end|>');
+        }
+        buf.writeln('<|im_start|>assistant');
+        final raw = await NativeDiagnostics.llmGenerate(buf.toString());
+        if (raw.trim().isEmpty) return const AgentReply('The on-device brain returned an empty answer. Try asking again.', null);
+        return parseReply(raw);
+      }
       final String content;
       if (s.mode == 'ollama') {
         final base = s.baseUrl.replaceAll(RegExp(r'/+$'), '');
