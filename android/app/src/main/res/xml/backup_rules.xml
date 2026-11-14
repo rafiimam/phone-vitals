@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The black box is THIS phone's evidence: recorder events, boot counters,
+     snapshots and agent settings must never be restored onto a different
+     device, where the Repair Passport would describe the wrong phone.
+     The 1.6 GB brain model file is re-downloadable; exclude it too. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="FlutterSharedPreferences.xml"/>
+    <exclude domain="file" path="dr_brain.task"/>
+</full-backup-content>

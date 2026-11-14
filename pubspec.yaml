@@ -1,7 +1,7 @@
 name: phone_vitals
 description: "BlackBox MD - a black box and a doctor for your phone. Sudden-failure forensics: flight recorder, case file, elimination tests, treatments and a repair passport."
 publish_to: 'none'
-version: 0.6.0+6
+version: 0.6.1+7
 environment:
   sdk: '>=3.4.0 <4.0.0'
   flutter: '>=3.22.0'

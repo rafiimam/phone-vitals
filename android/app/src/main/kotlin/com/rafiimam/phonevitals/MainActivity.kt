@@ -41,12 +41,12 @@ class MainActivity : FlutterActivity() {
                     "getMemoryStorage" -> result.success(memoryStorage())
                     "getCpuInfo" -> result.success(cpuInfo())
                     "getSensors" -> result.success(sensors())
-                    "getInstalledApps" -> result.success(installedApps())
+                    "getInstalledApps" -> runAsync(result) { installedApps() }
                     "getSystemIntegrity" -> result.success(systemIntegrity())
                     "hasUsageAccess" -> result.success(hasUsageAccess())
                     "openUsageAccessSettings" -> { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); result.success(true) }
                     "getUsageStats" -> result.success(usageStats())
-                    "listSharedFiles" -> result.success(sharedFiles())
+                    "listSharedFiles" -> runAsync(result) { sharedFiles() }
                     "getBootInfo" -> result.success(bootInfo())
                     "deleteFiles" -> { val u = (call.argument<List<String>>("uris") ?: emptyList()); val p = (call.argument<List<String>>("paths") ?: emptyList()); deleteFiles(u, p, result) }
                     "getAppStorageStats" -> appStorageStatsAsync(result)
@@ -58,6 +58,16 @@ class MainActivity : FlutterActivity() {
                 }
             } catch (e: Exception) { result.success(null) }
         }
+    }
+
+    /// Heavy probes (package scans, MediaStore + hashing) must not run on the
+    /// platform thread - that is the UI thread, and a media-heavy phone would
+    /// jank or ANR. Same pattern as appStorageStatsAsync.
+    private fun <T> runAsync(result: MethodChannel.Result, block: () -> T) {
+        Thread {
+            val v = try { block() } catch (e: Throwable) { null }
+            runOnUiThread { try { result.success(v) } catch (e: Exception) {} }
+        }.start()
     }
 
     private fun batteryDetail(): Map<String, Any?> {
@@ -74,13 +84,19 @@ class MainActivity : FlutterActivity() {
             BatteryManager.BATTERY_STATUS_CHARGING -> "Charging"; BatteryManager.BATTERY_STATUS_FULL -> "Full"
             BatteryManager.BATTERY_STATUS_DISCHARGING -> "Discharging"; BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "Not Charging"; else -> "Unknown" }
         val cycle = if (Build.VERSION.SDK_INT >= 34) intent?.getIntExtra("android.os.extra.CYCLE_COUNT", -1) ?: -1 else -1
+        // Sentinel rule (honesty labels): an unsupported reading is null /
+        // Unavailable, never a magic number passed off as a measurement.
+        val tempRaw = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
+        val voltRaw = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, Int.MIN_VALUE) ?: Int.MIN_VALUE
+        val curNow = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        val chargeCtr = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
         return mapOf("level" to pct, "health" to health, "status" to status,
-            "tempC" to ((intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1) / 10.0),
-            "voltageMv" to (intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1),
+            "tempC" to (if (tempRaw == Int.MIN_VALUE) null else tempRaw / 10.0),
+            "voltageMv" to (if (voltRaw == Int.MIN_VALUE) null else voltRaw),
             "technology" to (intent?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "Unknown"),
             "cycleCount" to cycle,
-            "currentNowUa" to bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW),
-            "chargeCounterUah" to bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER))
+            "currentNowUa" to (if (curNow == Long.MIN_VALUE) null else curNow),
+            "chargeCounterUah" to (if (chargeCtr == Long.MIN_VALUE) null else chargeCtr))
     }
 
     private fun thermal(): Map<String, Any?> {
@@ -141,13 +157,13 @@ class MainActivity : FlutterActivity() {
     private fun systemIntegrity(): Map<String, Any?> {
         val verified = sysProp("ro.boot.verifiedbootstate").ifEmpty { "unavailable" }
         val rootClues = mutableListOf<String>()
-        listOf("/system/bin/su","/system/xbin/su","/sbin/su","/data/local/tmp/frida-server").forEach { if (File(it).exists()) rootClues.add(it) }
+        listOf("/system/bin/su","/system/xbin/su","/sbin/su").forEach { if (File(it).exists()) rootClues.add(it) }
         try { Runtime.getRuntime().exec(arrayOf("which","su")).let { if (it.waitFor()==0) rootClues.add("su in PATH") } } catch (e: Exception) {}
         if (Build.TAGS?.contains("test-keys") == true) rootClues.add("test-keys build")
         return mapOf("securityPatch" to (Build.VERSION.SECURITY_PATCH ?: "Unknown"), "fingerprint" to Build.FINGERPRINT,
             "verifiedBootState" to verified, "debuggable" to (sysProp("ro.debuggable") == "1"),
             "rootSuspected" to rootClues.isNotEmpty(), "rootClues" to rootClues,
-            "systemTimeDriftSeconds" to 0, "buildType" to (Build.TYPE ?: "Unknown"))
+            "systemTimeDriftSeconds" to null, "buildType" to (Build.TYPE ?: "Unknown"))
     }
     private fun sysProp(key: String): String { return try { val c = Class.forName("android.os.SystemProperties"); val m = c.getMethod("get", String::class.java); (m.invoke(null, key) as? String) ?: "" } catch (e: Exception) { "" } }
 
@@ -160,7 +176,14 @@ class MainActivity : FlutterActivity() {
         if (!hasUsageAccess()) return emptyList()
         val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val end = System.currentTimeMillis(); val start = end - 7L*24*3600*1000
-        return usm.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, start, end).map { mapOf("packageName" to it.packageName, "totalForegroundMs" to it.totalTimeInForeground, "lastTimeUsed" to it.lastTimeUsed) }
+        // WEEKLY buckets can repeat a package; merge: sum foreground, keep latest use.
+        val merged = LinkedHashMap<String, LongArray>()
+        for (u in usm.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, start, end)) {
+            val a = merged.getOrPut(u.packageName) { longArrayOf(0L, 0L) }
+            a[0] += u.totalTimeInForeground
+            if (u.lastTimeUsed > a[1]) a[1] = u.lastTimeUsed
+        }
+        return merged.map { mapOf("packageName" to it.key, "totalForegroundMs" to it.value[0], "lastTimeUsed" to it.value[1]) }
     }
 
     /// Shared files via MediaStore-facing directories we can legally list.
@@ -170,15 +193,35 @@ class MainActivity : FlutterActivity() {
         val dirs = listOf(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS))
         val out = mutableListOf<Map<String, Any?>>()
         for (d in dirs) { d?.listFiles()?.forEach { f -> if (f.isFile) {
-            var sha: String? = null
-            if (f.length() in (1024*1024)..(200L*1024*1024)) { sha = try { val md = MessageDigest.getInstance("SHA-256"); f.inputStream().use { inp -> val buf = ByteArray(8192); var n: Int; while (inp.read(buf).also { n = it } > 0) md.update(buf, 0, n) }; md.digest().joinToString("") { "%02x".format(it) } } catch (e: Exception) { null } }
+            val sha: String? = null // filled later, only for size-colliding files
             val headerOk: Boolean? = when { f.name.lowercase().endsWith(".jpg") || f.name.lowercase().endsWith(".jpeg") -> try { val b = ByteArray(2); f.inputStream().use { it.read(b) }; (b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte()) } catch (e: Exception) { false }
                 f.name.lowercase().endsWith(".png") -> try { val b = ByteArray(4); f.inputStream().use { it.read(b) }; (b[0] == 0x89.toByte()) } catch (e: Exception) { false }
                 else -> null }
             out.add(mapOf("path" to f.absolutePath, "size" to f.length(), "sha256" to sha, "headerOk" to headerOk, "uri" to null))
         } } }
         mediaStoreFiles(out)
+        addCollisionHashes(out)
         return out
+    }
+
+    private fun sha256Of(open: () -> java.io.InputStream?): String? {
+        return try { val md = MessageDigest.getInstance("SHA-256"); open()?.use { inp -> val buf = ByteArray(8192); var n: Int; while (inp.read(buf).also { n = it } > 0) md.update(buf, 0, n) }; md.digest().joinToString("") { "%02x".format(it) } } catch (e: Exception) { null }
+    }
+
+    /// Duplicate detection only needs hashes for files whose SIZE collides
+    /// with another file's size - unique sizes cannot be duplicates. Hashing
+    /// every photo on the phone (old behaviour) wasted seconds and battery.
+    private fun addCollisionHashes(out: MutableList<Map<String, Any?>>) {
+        val counts = HashMap<Long, Int>()
+        for (e in out) { val s = (e["size"] as? Number)?.toLong() ?: 0L; if (s in (1024*1024)..(200L*1024*1024)) counts[s] = (counts[s] ?: 0) + 1 }
+        for (i in out.indices) {
+            val e = out[i]
+            val s = (e["size"] as? Number)?.toLong() ?: 0L
+            if (s !in (1024*1024)..(200L*1024*1024) || (counts[s] ?: 0) < 2) continue
+            val uriStr = e["uri"] as? String
+            val sha = if (uriStr != null) sha256Of { contentResolver.openInputStream(Uri.parse(uriStr)) } else sha256Of { File(e["path"].toString()).inputStream() }
+            if (sha != null) out[i] = e + ("sha256" to sha)
+        }
     }
 
     /// MediaStore merge: files the legacy directory listing cannot see under
@@ -204,8 +247,7 @@ class MainActivity : FlutterActivity() {
                     if (!seen.add(path)) continue
                     val size = c.getLong(sizeI)
                     val uri = ContentUris.withAppendedId(coll, c.getLong(idI))
-                    var sha: String? = null
-                    if (size in (1024*1024)..(200L*1024*1024)) { sha = try { val md = MessageDigest.getInstance("SHA-256"); contentResolver.openInputStream(uri)?.use { inp -> val buf = ByteArray(8192); var n: Int; while (inp.read(buf).also { n = it } > 0) md.update(buf, 0, n) }; md.digest().joinToString("") { "%02x".format(it) } } catch (e: Exception) { null } }
+                    val sha: String? = null // filled later, only for size-colliding files
                     val lower = name.lowercase()
                     val headerOk: Boolean? = when { lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> try { val b = ByteArray(2); contentResolver.openInputStream(uri)?.use { it.read(b) }; (b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte()) } catch (e: Exception) { false }
                         lower.endsWith(".png") -> try { val b = ByteArray(4); contentResolver.openInputStream(uri)?.use { it.read(b) }; (b[0] == 0x89.toByte()) } catch (e: Exception) { false }

@@ -46,10 +46,35 @@ class Recorder {
     final bootKey = bootCount >= 0 ? bootCount : (uptimeMs >= 0 ? -(DateTime.now().millisecondsSinceEpoch - uptimeMs) : 0);
     if (rebooted && bootKey != loggedKey) {
       final prevClean = sp.getBool('pv_prev_boot_clean') ?? sp.getBool('pv_clean_exit') ?? false;
+      // Vitals captured by BootReceiver at the shutdown moment (level%|tempDeciC|thermalStatus|wallMs).
+      var shutdownNote = '';
+      var shutdownCritical = false;
+      final pv = sp.getString('pv_prev_shutdown_vitals');
+      if (pv != null) {
+        final p = pv.split('|');
+        if (p.length >= 3) {
+          final lvl = int.tryParse(p[0]) ?? -1;
+          final tmp = int.tryParse(p[1]) ?? 999999;
+          final th = int.tryParse(p[2]) ?? -1;
+          final bits = <String>[];
+          if (lvl >= 0) bits.add('battery $lvl%');
+          if (tmp > -10000 && tmp < 10000) bits.add('${(tmp / 10).toStringAsFixed(1)}°C');
+          if (th >= 0) bits.add('thermal status $th');
+          if (bits.isNotEmpty) shutdownNote = ' At shutdown: ${bits.join(', ')}.';
+          if (lvl >= 0 && lvl <= 5) shutdownNote += ' The battery was nearly empty at shutdown.';
+          if (th >= 4) {
+            shutdownNote += ' Thermal state was CRITICAL or worse - a protective thermal shutdown sends the same clean broadcast as a user power-off, so treat this shutdown as suspicious, not calm.';
+            shutdownCritical = true;
+          }
+        }
+      }
+      final deltaNote = (snapBoot != null && bootCount > 0 && (bootCount - snapBoot) > 1)
+          ? ' Boot count jumped by ${bootCount - snapBoot} since the last app snapshot - some boots never reached BlackBox MD (possible bootloop, or boots before the app was opened).'
+          : '';
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final bootWall = uptimeMs >= 0 ? nowMs - uptimeMs : nowMs;
       if (prevClean) {
-        events.add(_chained(events, bootWall, 'reboot_clean', 'Phone restarted with a clean shutdown signal (power menu or system update). Not a failure - recorded so real failures stand out.'));
+        events.add(_chained(events, bootWall, 'reboot_clean', 'Phone restarted with a clean shutdown signal (power menu or system update).${shutdownCritical ? ' WARNING: shutdown vitals look critical - see note.' : ' Not a failure - recorded so real failures stand out.'}$shutdownNote$deltaNote'));
       } else {
         var vit = '';
         try {
@@ -57,7 +82,7 @@ class Recorder {
           if (raw != null) { final m = jsonDecode(raw) as Map; vit = ' Last heartbeat before it: battery ${m['pct']}%, temp ${m['temp']}C, thermal ${m['thermal']}.'; }
         } catch (_) {}
         final beat = sp.getInt(_heartbeatKey);
-        events.add(_chained(events, beat ?? bootWall, 'unexpected_reboot', 'Phone rebooted and NO clean shutdown was recorded - it died, crashed or lost power.$vit Detection: Android boot count changed. The kernel reason itself is hidden from normal apps, so this is inferred - but the reboot is real.'));
+        events.add(_chained(events, beat ?? bootWall, 'unexpected_reboot', 'Phone rebooted and NO clean shutdown was recorded - it died, crashed or lost power.$vit Detection: Android boot count changed. The kernel reason itself is hidden from normal apps, so this is inferred - but the reboot is real.$deltaNote'));
       }
       await sp.setInt(_loggedBootKey, bootKey);
       await sp.setString(_eventsKey, jsonEncode(events.map((e) => e.toJson()).toList()));
