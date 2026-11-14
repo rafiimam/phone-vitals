@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// the chest tool chip and the speech. Layered vector (CustomPainter) keeps
 /// the APK tiny and runs on low-end phones; a Rive rig can replace the
 /// painter later without changing callers.
-enum DoctorMode { exam, storage, battery, heat, cache, notifications, detective, connectivity, hardware, update }
+enum DoctorMode { exam, storage, battery, heat, cache, notifications, detective, connectivity, hardware, update, hurt, thinking, celebrate }
 
 extension DoctorModeInfo on DoctorMode {
   String get label => switch (this) {
@@ -19,6 +19,9 @@ extension DoctorModeInfo on DoctorMode {
         DoctorMode.connectivity => 'Connectivity',
         DoctorMode.hardware => 'Hardware tests',
         DoctorMode.update => 'Update surgery',
+        DoctorMode.hurt => 'Recovering',
+        DoctorMode.thinking => 'Thinking',
+        DoctorMode.celebrate => 'Treatment verified',
       };
   IconData get icon => switch (this) {
         DoctorMode.exam => Icons.medical_services,
@@ -31,6 +34,9 @@ extension DoctorModeInfo on DoctorMode {
         DoctorMode.connectivity => Icons.wifi,
         DoctorMode.hardware => Icons.build,
         DoctorMode.update => Icons.system_update,
+        DoctorMode.hurt => Icons.healing,
+        DoctorMode.thinking => Icons.psychology_alt,
+        DoctorMode.celebrate => Icons.celebration,
       };
   Color get accent => switch (this) {
         DoctorMode.exam => const Color(0xFF17457A),
@@ -43,6 +49,9 @@ extension DoctorModeInfo on DoctorMode {
         DoctorMode.connectivity => const Color(0xFFF9A825),
         DoctorMode.hardware => const Color(0xFF37474F),
         DoctorMode.update => const Color(0xFF00897B),
+        DoctorMode.hurt => const Color(0xFFE5334F),
+        DoctorMode.thinking => const Color(0xFF7B61FF),
+        DoctorMode.celebrate => const Color(0xFF10B97A),
       };
   Color get outfit => switch (this) {
         DoctorMode.exam => const Color(0xFFFFFFFF),
@@ -55,6 +64,9 @@ extension DoctorModeInfo on DoctorMode {
         DoctorMode.connectivity => const Color(0xFFFFF3E0),
         DoctorMode.hardware => const Color(0xFFFFFFFF),
         DoctorMode.update => const Color(0xFFB2DFDB),
+        DoctorMode.hurt => const Color(0xFFE8EDF5),
+        DoctorMode.thinking => const Color(0xFFEDE9FE),
+        DoctorMode.celebrate => const Color(0xFFFFFFFF),
       };
 }
 
@@ -230,6 +242,46 @@ class _DoctorPainter extends CustomPainter {
     } else {
       canvas.drawArc(const Rect.fromLTWH(86, 102, 28, 16), 0.3, 2.5, false, mouth);
     }
+    // State overlays (VITAL ORBIT §6.1)
+    if (mode == DoctorMode.hurt) {
+      // Bandage across the forehead: "I lost power. Here's what I saw."
+      canvas.save();
+      canvas.translate(100, 56);
+      canvas.rotate(-0.13);
+      final band = RRect.fromRectAndRadius(const Rect.fromLTWH(-46, -10, 92, 20), const Radius.circular(7));
+      canvas.drawRRect(band, fill(const Color(0xFFF2D492)));
+      canvas.drawRRect(band, Paint()..color = _ink..style = PaintingStyle.stroke..strokeWidth = 2);
+      final stitch = Paint()..color = const Color(0xFFC9A24D)..strokeWidth = 2.4..strokeCap = StrokeCap.round;
+      canvas.drawLine(const Offset(-30, -5), const Offset(-30, 5), stitch);
+      canvas.drawLine(const Offset(0, -5), const Offset(0, 5), stitch);
+      canvas.drawLine(const Offset(30, -5), const Offset(30, 5), stitch);
+      canvas.restore();
+    }
+    if (mode == DoctorMode.thinking) {
+      // Orbiting dots around the head
+      final dot = fill(const Color(0xFF7B61FF));
+      canvas.drawCircle(const Offset(170, 24), 5.5, dot);
+      canvas.drawCircle(const Offset(186, 46), 4.2, dot);
+      canvas.drawCircle(const Offset(158, 6), 3.4, dot);
+    }
+    if (mode == DoctorMode.celebrate) {
+      // Sparkles
+      final gold = fill(const Color(0xFFFFC93D));
+      for (final (cx, cy, s) in [(26.0, 22.0, 9.0), (176.0, 14.0, 11.0), (188.0, 74.0, 7.0)]) {
+        final star = Path()
+          ..moveTo(cx, cy - s)
+          ..lineTo(cx + s * 0.28, cy - s * 0.28)
+          ..lineTo(cx + s, cy)
+          ..lineTo(cx + s * 0.28, cy + s * 0.28)
+          ..lineTo(cx, cy + s)
+          ..lineTo(cx - s * 0.28, cy + s * 0.28)
+          ..lineTo(cx - s, cy)
+          ..lineTo(cx - s * 0.28, cy - s * 0.28)
+          ..close();
+        canvas.drawPath(star, gold);
+      }
+    }
+
     // Cheeks
     canvas.drawCircle(const Offset(58, 104), 6, Paint()..color = _orange.withOpacity(0.35));
     canvas.drawCircle(const Offset(142, 104), 6, Paint()..color = _orange.withOpacity(0.35));

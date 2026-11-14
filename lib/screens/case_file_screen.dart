@@ -81,6 +81,8 @@ class CaseFileScreen extends StatelessWidget {
       const SizedBox(height: 4),
       Text(deaths.isEmpty ? 'Status: MONITORING - black box recording, no failures yet' : 'Status: OPEN INVESTIGATION - ${deaths.length} unexpected death(s) on record', style: TextStyle(fontWeight: FontWeight.w700, color: deaths.isEmpty ? const Color(0xFF2E7D32) : const Color(0xFFC62828))),
       const SizedBox(height: 12),
+      _passportCard(context),
+      const SizedBox(height: 8),
       DoctorCard(mode: DoctorMode.detective, speech: speech, concerned: concerned, happy: happy),
       const SizedBox(height: 6),
       if (deaths.isNotEmpty)
@@ -113,6 +115,59 @@ class CaseFileScreen extends StatelessWidget {
       const SizedBox(height: 10),
       const Card(color: Color(0xFFFFF3E0), child: Padding(padding: EdgeInsets.all(14), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(Icons.backup_outlined, color: Colors.deepOrange), SizedBox(width: 10), Expanded(child: Text('A case file is evidence, not a backup. If deaths are repeating, copy photos and files somewhere safe NOW - a phone that dies mid-boot may not offer another chance.'))]))),
     ]);
+  }
+
+  /// Repair Passport (VITAL ORBIT §8.12): a boarding-pass style summary -
+  /// device, verdict, event counts and the hash-chain head seal. The full
+  /// text Passport is one Share tap away; "Show to shop" is large-type.
+  Widget _passportCard(BuildContext context) {
+    final deaths = events.where((e) => e.kind == 'unexpected_reboot').length;
+    final head = events.isNotEmpty && events.first.chain.isNotEmpty ? events.first.chain : '';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF17457A), width: 1.4)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.badge_outlined, color: Color(0xFF17457A)),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('REPAIR PASSPORT', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.6, fontSize: 14, color: Color(0xFF17457A)))),
+          if (head.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFB9DDBB))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.link, size: 11, color: Color(0xFF2E7D32)),
+                const SizedBox(width: 3),
+                Text('chain #${head.substring(0, 6)}', style: const TextStyle(fontFamily: 'monospace', fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF2E7D32))),
+              ]),
+            ),
+        ]),
+        const SizedBox(height: 10),
+        Text(deviceLine, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF12283F))),
+        const SizedBox(height: 3),
+        Text('Verdict so far: ${health.verdict} (score ${health.score}/100, estimated)', style: const TextStyle(color: Colors.black87, fontSize: 13)),
+        Text('${events.length} recorded event(s) - $deaths unexpected death(s)${battery != null && battery!.cycleCount >= 0 ? ' - ${battery!.cycleCount} battery cycles (measured)' : ''}', style: const TextStyle(color: Colors.black54, fontSize: 12.5)),
+        const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: Color(0xFFDFE8F1))),
+        Row(children: [
+          FilledButton.icon(onPressed: onShare, icon: const Icon(Icons.share, size: 17), label: const Text('Share Passport')),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => showDialog(
+              context: context,
+              builder: (c) => AlertDialog(
+                title: const Text('For the repair shop'),
+                content: Text('$deviceLine\n\nVerdict so far: ${health.verdict}.\n${events.length} events recorded, $deaths unexpected deaths.\n${deaths > 0 ? 'Please quote a battery replacement first. The full evidence file (Repair Passport) can be shared from the Case File.' : 'No failures recorded yet - please run your standard diagnostics.'}', style: const TextStyle(fontSize: 19, height: 1.5)),
+                actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Done'))],
+              ),
+            ),
+            icon: const Icon(Icons.storefront, size: 17),
+            label: const Text('Show to shop'),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        const Text('Generated on this phone. Not uploaded anywhere.', style: TextStyle(fontSize: 11.5, color: Colors.black45)),
+      ]),
+    );
   }
 
   Widget _board(String title, List<String> items, IconData icon, Color color, String emptyText) {

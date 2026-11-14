@@ -26,12 +26,51 @@ class Recorder {
   static const _loggedBootKey = 'pv_logged_boot_key';
   static const _safePendingKey = 'pv_safemode_pending_ms';
 
+  static const _samplesKey = 'pv_samples';
+
   static Future<void> heartbeat({required int batteryPct, required double tempC, required String thermal, int uptimeMs = -1}) async {
     final sp = await SharedPreferences.getInstance();
     final now = DateTime.now().millisecondsSinceEpoch;
     await sp.setInt(_heartbeatKey, now);
     await sp.setString(_vitalsKey, jsonEncode({'pct': batteryPct, 'temp': tempC, 'thermal': thermal, 'ts': now}));
     if (uptimeMs >= 0) await sp.setInt(_snapUptimeKey, uptimeMs);
+    await _pushSample(sp, now, batteryPct, tempC, thermal);
+  }
+
+  /// Ring buffer of vitals samples for the Vitals Strip line. Samples are
+  /// taken when the app opens and during checks - the recorder runs no
+  /// 24x7 background service by design, so the strip draws real points,
+  /// never a fabricated continuous feed.
+  static Future<void> _pushSample(SharedPreferences sp, int ts, int pct, double tempC, String thermal) async {
+    var list = <Map<String, dynamic>>[];
+    try {
+      final raw = sp.getString(_samplesKey);
+      if (raw != null) list = (jsonDecode(raw) as List).whereType<Map>().map((m) => m.map((k, v) => MapEntry(k.toString(), v))).toList();
+    } catch (_) {}
+    // Avoid piling up near-identical points from rapid reloads.
+    if (list.isNotEmpty && ts - ((list.last['ts'] as num?)?.toInt() ?? 0) < 60000) {
+      list[list.length - 1] = {'ts': ts, 'pct': pct, 'temp': tempC, 'thermal': thermal};
+    } else {
+      list.add({'ts': ts, 'pct': pct, 'temp': tempC, 'thermal': thermal});
+    }
+    if (list.length > 40) list = list.sublist(list.length - 40);
+    await sp.setString(_samplesKey, jsonEncode(list));
+  }
+
+  static Future<List<Map<String, dynamic>>> samples() async {
+    final sp = await SharedPreferences.getInstance();
+    try {
+      final raw = sp.getString(_samplesKey);
+      if (raw == null) return [];
+      return (jsonDecode(raw) as List).whereType<Map>().map((m) => m.map((k, v) => MapEntry(k.toString(), v))).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<int?> lastHeartbeatMs() async {
+    final sp = await SharedPreferences.getInstance();
+    return sp.getInt(_heartbeatKey);
   }
 
   static Future<List<RecorderEvent>> checkAndLoad({int bootCount = -1, int uptimeMs = -1}) async {

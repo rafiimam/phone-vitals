@@ -170,6 +170,24 @@ class TimelineScreen extends StatelessWidget { final List<RecorderEvent> events;
     const Text('A reboot is counted only when Android\'s boot count changes. A clean shutdown signal (power menu / update) = normal restart; no signal = the phone died, crashed or lost power. The kernel reason itself is hidden from normal apps. v0.1 "app session ended" entries were app-process restarts, NOT phone shutdowns.'),
     const SizedBox(height: 10),
     if(events.isEmpty) const Text('No events yet. Leave BlackBox MD installed - the recorder learns from the next reboot.'),
-    ...events.map((e)=>Card(child: ListTile(contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), leading: CircleAvatar(backgroundColor: _color(e.kind).withOpacity(0.12), child: Icon(_icon(e.kind), color: _color(e.kind))), title: Text(_title(e.kind), style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text('${e.time}\n${e.detail}'), isThreeLine:true))),
+    ...events.map((e)=>Card(child: ListTile(contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), leading: CircleAvatar(backgroundColor: _color(e.kind).withOpacity(0.12), child: Icon(_icon(e.kind), color: _color(e.kind))), title: Row(children:[Expanded(child: Text(_title(e.kind), style: const TextStyle(fontWeight: FontWeight.w700))), if(e.chain.isNotEmpty) ChainSeal(chain: e.chain)]), subtitle: Text('${e.time}\n${e.detail}'), isThreeLine:true))),
   ]); }
+}
+
+/// ChainSeal (VITAL ORBIT §7): the event's tamper-evident hash as a small
+/// badge - first 6 hex chars. A shop can recompute the chain from the
+/// exported Passport and see whether any entry was edited after the fact.
+class ChainSeal extends StatelessWidget {
+  final String chain;
+  const ChainSeal({super.key, required this.chain});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFB9DDBB))),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.link, size: 11, color: Color(0xFF2E7D32)),
+          const SizedBox(width: 3),
+          Text('#${chain.length >= 6 ? chain.substring(0, 6) : chain}', style: const TextStyle(fontFamily: 'monospace', fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF2E7D32))),
+        ]),
+      );
 }
